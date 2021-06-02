@@ -8,6 +8,7 @@ using namespace std;
 #include "../include/dcel.h"
 #include "../include/lca.h"
 
+
 void preprocess(){
 
 }
@@ -18,7 +19,7 @@ int main(){
 	struct lca* your_lca = new lca();
 	clock_t start = clock();
 	Node* root_node = generate(n);
-	cout << "Genrating binary tree took: " << (clock() - start) / (double) CLOCKS_PER_SEC << "\n\n";
+	cout << "Generating random binary tree took: " << (clock() - start) / (double) CLOCKS_PER_SEC << "\n\n";
 
 	your_lca->tree_depth = maxDepth(root_node);
 	int lDepth = maxDepth(root_node->left);
