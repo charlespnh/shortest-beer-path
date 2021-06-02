@@ -45,8 +45,8 @@ int main() {
     cout << "Node_v: " << node_v->data << endl;
 
     // command of getting the query
-    int result = get_lca(lca_1, node_u->data, node_v->data);
+    Node* result = get_lca(lca_1, node_u->data, node_v->data);
 
-    cout << "Result should be: " << root->left->data << " Actual result is: "<< result << endl;
+    cout << "Result should be: " << root->left->data << " Actual result is: "<< result->data << endl;
 }
 
