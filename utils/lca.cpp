@@ -155,9 +155,9 @@ int get_in_block_min(struct lca* lca, int b, int l, int r) {
     return lca->blocks[lca->block_bit[b]][l][r] + b * lca->block_size;
 }
 
-Node* get_lca(struct lca* lca, int u, int v) {
-    int l = lca->first_visit[u];
-    int r = lca->first_visit[v];
+Node* get_lca(struct lca* lca, Node* u, Node* v) {
+    int l = lca->first_visit[u->data];
+    int r = lca->first_visit[v->data];
     if (l > r)
         swap(l, r);
 
@@ -238,7 +238,7 @@ void test_1(struct lca* lca, int k){
     }
 
     lca->getting_start = clock();
-    Node* result = get_lca(lca, node_u->data, node_v->data);
+    Node* result = get_lca(lca, node_u, node_v);
     lca->getting_duration = (clock() - lca->getting_start ) / (double) CLOCKS_PER_SEC;
 
     cout << "Result should be: " << root->left << "  " << root->left->data;
@@ -276,7 +276,7 @@ void test_2(struct lca* lca, int k){
     }
 
     lca->getting_start = clock();
-    Node* result = get_lca(lca, node_u->data, node_v->data);
+    Node* result = get_lca(lca, node_u, node_v);
     lca->getting_duration = (clock() - lca->getting_start ) / (double) CLOCKS_PER_SEC;
 
     cout << "Result should be: " << node_u << "  " << node_u->data;
@@ -310,7 +310,7 @@ void test_right_skewed(struct lca* lca, int k){
 
     lca->getting_start = clock();
     
-    Node* result = get_lca(lca, node_u->data, node_v->data);
+    Node* result = get_lca(lca, node_u, node_v);
     lca->getting_duration = (clock() - lca->getting_start ) / (double) CLOCKS_PER_SEC;
 
     cout << "Result should be: " << node_u << "  " << node_u->data;
@@ -365,7 +365,7 @@ void test_balanced_btree(struct lca* lca, int k){
     cout << "Node_u: " << node_u->data << endl;
     cout << "Node_v: " << node_v->data << endl;
     lca->getting_start = clock();
-    Node* result = get_lca(lca, node_u->data, node_v->data);
+    Node* result = get_lca(lca, node_u, node_v);
     lca->getting_duration = (clock() - lca->getting_start ) / (double) CLOCKS_PER_SEC;
 
     cout << "Result should be: " << root->left << "  " << root->left->data;

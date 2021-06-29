@@ -26,15 +26,15 @@ int main() {
     cout << "*** select one node in the subtree of root->left, should return root->left ***" << endl << endl;
     struct lca* lca_4 = new lca();
     cout << "Testing on 1000 nodes" << endl;
-    test_2(lca_4, 2000);
+    test_2(lca_4, 1000);
     delete lca_4;
     struct lca* lca_5 = new lca();
     cout << "Testing on 10000 nodes" << endl;
-    test_2(lca_5, 20000);
+    test_2(lca_5, 10000);
     delete lca_5;
     struct lca* lca_6 = new lca();
     cout << "Testing on 100000 nodes" << endl;
-    test_2(lca_6, 200000);
+    test_2(lca_6, 100000);
     delete lca_6;
 
     cout << "=======================================================================================" << endl;

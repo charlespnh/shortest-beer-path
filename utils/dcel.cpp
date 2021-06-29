@@ -5,82 +5,82 @@
 
 using namespace std;
 
-#include "../include/dcel.h"
+#include "../include/btree.h"
 #include "../include/lca.h"
+#include "../src/sp_dag.h"
 
 
-void preprocess(){
+// Check if vertex v belongs to the Node face
+// Return HalfEdge incident to Node face and whose target == v
+HalfEdge* check_incident_vertex(Node* face, Vertex* v){
+	HalfEdge* e = face->incident_edge;
+	if (e->target == v)
+		return e;
+	else if (e->prev->target == v)
+		return e->prev;
+	else if (e->next->target == v)
+		return e->next;
+	return NULL;
+}
 
+// Check if v is on u's chain
+// Return HalfEdge whose incident to v and apex == u (i.e. on u_chain)
+HalfEdge* check_on_chain(Vertex* u, Vertex* v, lca* your_lca){
+	Node* lnq = last_node_query(v, v->out_edge->incident_face, u->out_edge->incident_face, your_lca);
+	HalfEdge* dag = lnq->incident_edge;
+	if (dag->target == u)
+		return dag->prev;
+	else if (dag->prev->target == u)
+		return dag->next;
+	else if (dag->apex.first == u)
+		return dag;
+	return NULL;
 }
 
 
-int main(){
-	int n = 1000000;
-	struct lca* your_lca = new lca();
-	clock_t start = clock();
-	Node* root_node = generate(n);
-	cout << "Generating random binary tree took: " << (clock() - start) / (double) CLOCKS_PER_SEC << "\n\n";
+void preprocess_graph(HalfEdge* root_edge, lca* your_lca){
+	Vertex* curr = root_edge->target;
+	HalfEdge* e = root_edge->twin;
 
-	your_lca->tree_depth = maxDepth(root_node);
-	int lDepth = maxDepth(root_node->left);
-	int rDepth = maxDepth(root_node->right);
-	cout << "Root: " << root_node->data << "\n";
-	cout << "Depth: " << your_lca->tree_depth << "\n";
-	cout << "lDepth: " << lDepth << "\n";
-	cout << "rDepth: " << rDepth << "\n\n";
+	// Traversing each vertex of outerplanar graph
+	do {
+		HalfEdge* tmp_edge = e->twin;
+		Node* dual_chain[2];
+		int size = 0;
+		int index_chain = 0;
+		double dp = 0;
+		// For each vertex, get the v_chain of planar graph and p_chain of dual tree
+		do {
+			if (tmp_edge->twin->incident_face == NULL || tmp_edge->next->twin->incident_face == NULL)
+				dual_chain[size++] = tmp_edge->incident_face;
 
-	// cout << "Preorder traversal: \n";	traversal(root_node);	cout << "\n\n";
-	n = inorder_label(root_node, 1) - 1;
-	cout << "Number of nodes: " << n << "\n\n";
-	cout << "New root after inorder labelling: " << root_node->data << "\n\n";  
-	// cout << "Inorder traversal: \n";	inorder_traversal(root_node);	cout << "\n\n";
+			curr->v_chain.push_back(make_pair(tmp_edge->prev->target, dp));
+			dp += tmp_edge->prev->weight;
+			tmp_edge->prev->apex.first = curr;
+			tmp_edge->prev->apex.second = index_chain++;
 
-	start = clock();
-	HalfEdge* root_edge = build_polygon(root_node, n + 2);
-	cout << "Triangulation took: " << (clock() - start) / (double) CLOCKS_PER_SEC << "\n\n";
-	// vertex_traversal(root_edge); cout << "DONE\n\n";
-	// face_traversal(root_node); cout << "DONE\n\n";
+			tmp_edge = tmp_edge->next->twin;
+		} while (tmp_edge->next != e);
+		curr->v_chain.push_back(make_pair(tmp_edge->prev->target, dp));
+		// for (auto i : curr->v_chain) printf("Vertex %d | length %f\n", i.first->data, i.second);	cout << "\n";
+		curr->p_chain_cw = curr->p_chain_ccw = dual_chain[0];
+		if (size == 2){
+			curr->p_chain_ccw = dual_chain[1];
+			curr->h = get_lca(your_lca, curr->p_chain_cw, curr->p_chain_ccw);
+		}
+		else curr->h = curr->p_chain_cw;
 
-	precompute_lca(your_lca, root_node);
-	your_lca->preprocessing_duration = (clock() - your_lca->preprocessing_start ) / (double) CLOCKS_PER_SEC;
-    cout << "LCA preprossing took: " << your_lca->preprocessing_duration << " s\n";
-
-	struct Node *u, *v;
-	u = v = root_node->left;
-
-	for (int i = 0; i < 10; i++){
-		if (u->left) u = u->left;
-		//else continue;
-
-		if (u->right) u = u->right;
-		//else continue;
-	}
-
-	for (int i = 0; i < 10; i++){
-		if (v->right) v = v->right;
-		//else continue;
-
-		if (v->left) v = v->left;
-		//else continue;
-	}
-
-	cout << "Node u: " << u->data << "\n";
-	cout << "Node v: " << v->data << "\n";
-
-	your_lca->getting_start = clock();
-	Node* res = get_lca(your_lca, u->data, v->data);
-	your_lca->getting_duration = (clock() - your_lca->getting_start ) / (double) CLOCKS_PER_SEC;
-	cout << "Actual result: " << res->data << " Result should be: " << root_node->left->data << " Getting result took: " << your_lca->getting_duration << "\n\n";
-	free_mem(root_node);
-
-	return 0;
+		e->target->out_edge = e->twin;
+		e = e->next;
+		curr = e->twin->target;
+	} while(curr != root_edge->target);
 }
 
 
 Vertex* add_vertex(int val, int radius){
 	Vertex* new_vertex = new Vertex(val);
-	new_vertex->point.first = (double) radius * sin((val + 1) * (2*M_PI/radius));
-	new_vertex->point.second = (double) radius * cos((val + 1) * (2*M_PI/radius));
+	new_vertex->point.first = radius * sin((val + 1) * (2*M_PI/radius));
+	new_vertex->point.second = radius * cos((val + 1) * (2*M_PI/radius));
 	
 	return new_vertex;
 }
@@ -93,7 +93,6 @@ HalfEdge* add_edge(HalfEdge* h, Vertex* dest, Node* f1, Node* f2){
 	double euclidian_dist = sqrt((dest->point.first - src->point.first) * (dest->point.first - src->point.first) + 
 								(dest->point.second - src->point.second) * (dest->point.second - src->point.second));
 	h1->weight = h2->weight = euclidian_dist;
-	dest->out_edge = h2;
 	h1->twin = h2;
 	h2->twin = h1;
 	h1->target = dest;
@@ -146,16 +145,13 @@ HalfEdge* build_polygon(Node* root, int V){
 	HalfEdge* h2 = new HalfEdge();
 	h1->weight = h2->weight = sqrt((u->point.first - v->point.first) * (u->point.first - v->point.first) + 
 								(u->point.second - v->point.second) * (u->point.second - v->point.second));
-	u->out_edge = h1;
-	v->out_edge = h2;
 	h1->twin = h2;
 	h2->twin = h1;
 	h1->target = v;
 	h2->target = u;
 	h1->incident_face = root;
-	h2->incident_face = new Node(0);
+	h2->incident_face = NULL;
 	h1->incident_face->incident_edge = h1;
-	h2->incident_face->incident_edge = h2;
 	h1->next = h2;
 	h2->next = h1;
 	h1->prev = h2;
@@ -184,16 +180,20 @@ void triangulate_polygon(HalfEdge* root_edge, Node* root, int V){
 
 
 
+
 void vertex_traversal(HalfEdge* root_edge){
 	HalfEdge* e = root_edge->twin;
 	do {
 		printf("Vertex %p  %d\n", e->target, e->target->data);
-		printf("Edge %p  (%d, %d)  %f\n", e, e->prev->target->data, e->target->data, e->weight);
+		printf("Edge %p  (%d, %d)  %.10f\n", e, e->prev->target->data, e->target->data, e->weight);
+		printf("Out edge %p  (%d, %d)  %.10f\n", e->target->out_edge, e->target->out_edge->prev->target->data, e->target->out_edge->target->data, 
+												 e->target->out_edge->weight);
 		printf("Face %p  %d\n\n", e->twin->incident_face, e->twin->incident_face->data);
 
 		e = e->next;
 	} while(e->target != root_edge->twin->target);
 }
+
 
 void face_traversal(Node* root){
 	if (root == NULL) return;

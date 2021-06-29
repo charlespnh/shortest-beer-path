@@ -75,10 +75,11 @@ struct Node* generate_n_nodes_tree(int N){
         links[k] = k;
     }
 
-    int m = random(N);
-    struct Node* root = new Node(m);
-    root->left = insertLevelOrder(links, root->left, 0, m);
-    root->right = insertLevelOrder(links, root->right, m + 1, N);
+    // int m = random(N);
+    // struct Node* root = new Node(m);
+    // root->left = insertLevelOrder(links, root->left, 0, m);
+    // root->right = insertLevelOrder(links, root->right, m + 1, N);
+    struct Node* root = insertLevelOrder(links, root, 0, N);
 
     return root;
 }

@@ -53,7 +53,7 @@ void compute_all_combinations(struct lca* lca, int euler_size);
 void build_log_array(struct lca* lca);
 void precompute_lca(struct lca* lca, struct Node* root);
 int get_in_block_min(struct lca* lca, int b, int l, int r);
-Node* get_lca(struct lca* lca, int u, int v);
+Node* get_lca(struct lca* lca, Node* u, Node* v);
 
 void test_1(struct lca* lca, int k);
 void test_2(struct lca* lca, int k);
