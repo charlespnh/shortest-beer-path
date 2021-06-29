@@ -15,10 +15,8 @@ g++ -std=c++11 utils/btree.cpp utils/lca.cpp test/sample_usage.cpp -o main.out |
 ./main.out
 ```
 
-## Run polygon triangulation (constructing maximal outerplanar graph)
-- Run ```dcel.cpp``` file
-- Uncomment the printing lines to see more (N < 10 recommended)
+## Run shortest path
+- Run ```main.cpp``` file
 ```
-g++ -std=c++11 utils/btree.cpp utils/lca.cpp utils/dcel.cpp -o main.out || ./main.out
-./main.out
+g++ -std=c++17 utils/btree.cpp utils/lca.cpp utils/dcel.cpp src/sp_dag.cpp src/main.cpp -o main.out || ./main.out
 ```
