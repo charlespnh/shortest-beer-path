@@ -19,4 +19,5 @@ g++ -std=c++11 utils/btree.cpp utils/lca.cpp test/sample_usage.cpp -o main.out |
 - Run ```main.cpp``` file
 ```
 g++ -std=c++17 utils/btree.cpp utils/lca.cpp utils/dcel.cpp src/sp_dag.cpp src/main.cpp -o main.out || ./main.out
+./main.out
 ```
