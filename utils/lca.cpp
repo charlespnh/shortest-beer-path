@@ -6,8 +6,8 @@
 
 using namespace std;
 
-#include "../include/btree.h"
 #include "../include/lca.h"
+#include "../include/btree.h"
 
 void eulerTree(struct lca* lca, struct Node* root, int h) { 
     // store current node's data 
@@ -128,7 +128,9 @@ void build_log_array(struct lca* lca){
 
 void precompute_lca(struct lca* lca, struct Node* root) {
     // Stores Euler Tour 
-    lca->first_visit.assign(lca->MAX, -1);  
+    lca->first_visit.assign(lca->N, -1);
+    lca->height.reserve(2 * lca->N);
+    lca->euler_tour.reserve(2 * lca->N);
 
     lca->preprocessing_start = clock();
     eulerTree(lca, root, 0); 
@@ -155,9 +157,13 @@ int get_in_block_min(struct lca* lca, int b, int l, int r) {
     return lca->blocks[lca->block_bit[b]][l][r] + b * lca->block_size;
 }
 
-Node* get_lca(struct lca* lca, Node* u, Node* v) {
-    int l = lca->first_visit[u->data];
-    int r = lca->first_visit[v->data];
+struct Node* get_lca(struct lca* lca, struct Node* u, struct Node* v){
+    return get_lca(lca, u->data, v->data);
+}
+
+struct Node* get_lca(struct lca* lca, int u, int v) {
+    int l = lca->first_visit[u];
+    int r = lca->first_visit[v];
     if (l > r)
         swap(l, r);
 
