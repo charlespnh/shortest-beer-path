@@ -1,27 +1,19 @@
-// #include<queue>
 #include <vector>
+#include <deque>
 #include <random>
 #include <iostream>
 
 using namespace std;
 
 #include "../include/btree.h"
-
-double random(int range_to) {
-    random_device                  rand_dev;
-    mt19937                        generator(rand_dev());
-    uniform_int_distribution<int>    distr(0, range_to);
-    return distr(generator);
-}
+#include "../include/utils.h"
 
 // slide
 struct Node* generate(int N) {
     vector<int> links(2*N + 1);
     for (int k = 1; k < 2*N; k=k+2){
-        int x = random(k);
-        default_random_engine generator;
-        bernoulli_distribution distribution(0.5);
-        if (distribution(generator)){ 
+        int x = random_uniform(k);
+        if (random_bernoulli(0.5)){ 
             links[k] = k+1; 
             links[k+1] = links[x]; 
         } else { 
@@ -75,7 +67,7 @@ struct Node* generate_n_nodes_tree(int N){
         links[k] = k;
     }
 
-    // int m = random(N);
+    // int m = random_uniform(N);
     // struct Node* root = new Node(m);
     // root->left = insertLevelOrder(links, root->left, 0, m);
     // root->right = insertLevelOrder(links, root->right, m + 1, N);
@@ -100,6 +92,26 @@ struct Node* insertLevelOrder(vector<int>& arr, Node* root, int i, int n) {
 
     return root; 
 } 
+
+struct Node* build_cartesian_tree(vector<double>& arr){
+    int n = arr.size();
+    struct Node *top, *node; 
+    deque<struct Node*> s;
+    for (int i = 0; i < n; i++){
+        top = NULL;
+        node = new Node(i, arr[i]);
+        while (!s.empty() && s.back()->dd >= arr[i]){
+            top = s.back();
+            s.pop_back();
+        }
+        if (top) node->left = top; 
+        if (!s.empty()) s.back()->right = node;
+
+        s.push_back(node);
+    }
+
+    return s.front();
+}
 
 int maxDepth(Node* node) { 
     if (node == NULL) 
@@ -126,59 +138,17 @@ void free_mem(struct Node* root){
     root = NULL;
 }
 
-// /* Function to insert the formed nodes to the tree when a parent node does not have a right or the left child. */
-// void insert(struct Node *root, int data) {
-//     struct Node *temp;
-//     queue<struct Node*>q;
-//     q.push(root);
-//     while(!q.empty()) 
-//     {
-//         temp = q.front();
-//         q.pop();
-
-//         /* Insert node as the left child of the parent node. */
-//         if(temp->left == NULL) {
-// 			if(data != NULL){
-//             	temp->left = new Node(data);
-// 			}else{
-// 				cout << "NULL " << temp->data << "\n";
-// 				temp->left = new Node();
-// 			}
-//             break;
-//         }
-
-//         /* If the left node is not null push it to the queue. */
-//         else
-//             q.push(temp->left);
-        
-//         /* Insert node as the right child of the parent node. */
-//         if(temp->right == NULL) {
-// 			if(data != NULL){
-//             	temp->right = new Node(data);
-// 			}else{
-// 				cout << "NULL_r " << temp->data << "\n";
-
-// 				temp->right = new Node();
-// 			}
-//             break;
-//         }
-
-//         /* If the right node is not null push it to the queue. */
-//         else
-//             q.push(temp->right);
-//     }
-// }
 
 
 /* Function for tree traversal of every node in the tree. */
-void traversal(struct Node *root){
+void preorder_traversal(struct Node *root){
     if (root == NULL) return;
 
     //if (root->data >= 0)
-    cout << "Node " << root << ": " << root->data << "\n";
+    cout << "Node " << root->data << ": " << root->dd << "\n";
 
-    traversal(root->left);
-    traversal(root->right);
+    preorder_traversal(root->left);
+    preorder_traversal(root->right);
 }
 
 
@@ -187,7 +157,7 @@ void inorder_traversal(struct Node *root){
 
     inorder_traversal(root->left);
     if (root->data >= 0)
-        cout << "Node: " << root->data << "\n";
+        cout << "Node " << root->data << ": " << root->dd << "\n";
     inorder_traversal(root->right);
 }
 

@@ -1,13 +1,16 @@
-#include <iostream>
-#include <cstdio>
+#include <unordered_set>
 #include <cmath>
-#include <ctime>
+#include <random>
+#include <cstdio>
+#include <iostream>
 
 using namespace std;
 
+#include "../include/dcel.h"
+#include "../include/beer.h"
 #include "../include/btree.h"
 #include "../include/lca.h"
-#include "../src/sp_dag.h"
+#include "../include/utils.h"
 
 
 // Check if vertex v belongs to the Node face
@@ -38,50 +41,78 @@ HalfEdge* check_on_chain(Vertex* u, Vertex* v, lca* your_lca){
 }
 
 
-void preprocess_graph(HalfEdge* root_edge, lca* your_lca){
-	Vertex* curr = root_edge->target;
-	HalfEdge* e = root_edge->twin;
+void preprocess_graph(struct HalfEdge* root_edge, struct lca* dual_lca){
+	// Beer Distance - post-order traversal of D(G)
+	computeBeerDistNotRoot(root_edge, root_edge->incident_face);
+	// Beer Distance - pre-order traversal of D(G)
+	computeBeerDistRoot(root_edge, root_edge->incident_face);
 
+	struct Vertex* curr = root_edge->target;
+	struct HalfEdge* traverse_e = root_edge->twin;
+	int cnt = 0;
 	// Traversing each vertex of outerplanar graph
 	do {
-		HalfEdge* tmp_edge = e->twin;
-		Node* dual_chain[2];
+		struct Chain* curr_chain = new Chain();
+		struct HalfEdge* tmp_e = traverse_e->twin;
+		struct Node* dual_chain[2];
 		int size = 0;
 		int index_chain = 0;
 		double dp = 0;
-		// For each vertex, get the v_chain of planar graph and p_chain of dual tree
+		// For each vertex, preprocess the v_chain of planar graph and p_chain of dual tree
 		do {
-			if (tmp_edge->twin->incident_face == NULL || tmp_edge->next->twin->incident_face == NULL)
-				dual_chain[size++] = tmp_edge->incident_face;
+			if (tmp_e->twin->incident_face == NULL || tmp_e->next->twin->incident_face == NULL)
+				dual_chain[size++] = tmp_e->incident_face;
 
-			curr->v_chain.push_back(make_pair(tmp_edge->prev->target, dp));
-			dp += tmp_edge->prev->weight;
-			tmp_edge->prev->apex.first = curr;
-			tmp_edge->prev->apex.second = index_chain++;
+			curr_chain->v_chain.push_back(make_pair(tmp_e, dp));
+			curr_chain->Av.push_back(tmp_e->prev->beer_edge->distB - tmp_e->prev->weight);
+			dp += tmp_e->prev->weight;
+			tmp_e->prev->apex.first = curr;
+			tmp_e->prev->apex.second = index_chain++;
 
-			tmp_edge = tmp_edge->next->twin;
-		} while (tmp_edge->next != e);
-		curr->v_chain.push_back(make_pair(tmp_edge->prev->target, dp));
-		// for (auto i : curr->v_chain) printf("Vertex %d | length %f\n", i.first->data, i.second);	cout << "\n";
-		curr->p_chain_cw = curr->p_chain_ccw = dual_chain[0];
+			tmp_e = tmp_e->next->twin;
+		} while (tmp_e->next != traverse_e);
+		curr_chain->v_chain.push_back(make_pair(tmp_e, dp));
+
+		struct Node* node = build_cartesian_tree(curr_chain->Av);
+		struct lca* v_chain_lca = new lca(curr_chain->Av.size());
+		precompute_lca(v_chain_lca, node);
+		curr_chain->root_Av = node;
+		curr_chain->lca_chain_Av = v_chain_lca;
+		// cout << "Vertex " << curr->data << ": ";	for (auto i : curr_chain->Av) cout << i << " | ";	cout << "\n";
+
+		curr_chain->p_chain_cw = curr_chain->p_chain_ccw = dual_chain[0];
 		if (size == 2){
-			curr->p_chain_ccw = dual_chain[1];
-			curr->h = get_lca(your_lca, curr->p_chain_cw, curr->p_chain_ccw);
+			curr_chain->p_chain_ccw = dual_chain[1];
+			curr_chain->p_chain_h = get_lca(dual_lca, curr_chain->p_chain_cw, curr_chain->p_chain_ccw);
 		}
-		else curr->h = curr->p_chain_cw;
+		else curr_chain->p_chain_h = curr_chain->p_chain_cw;
 
-		e->target->out_edge = e->twin;
-		e = e->next;
-		curr = e->twin->target;
+		traverse_e->target->out_edge = traverse_e->twin;
+		traverse_e = traverse_e->next;
+		curr->chain = curr_chain;
+		curr = traverse_e->twin->target;
 	} while(curr != root_edge->target);
+
+	/* do {
+		struct Node* node = build_cartesian_tree(curr->chain->Av);
+		struct lca* v_chain_lca = new lca();
+		// precompute_lca(v_chain_lca, node);
+		// cout << cnt++ << "\n";
+		curr->chain->root_Av = node;
+		curr->chain->lca_chain_Av = v_chain_lca;
+
+		traverse_e = traverse_e->next;
+		curr = traverse_e->twin->target;
+	} while(curr != root_edge->target); */
 }
 
 
-Vertex* add_vertex(int val, int radius){
+Vertex* add_vertex(int val, int radius, float beer_prob){
 	Vertex* new_vertex = new Vertex(val);
 	new_vertex->point.first = radius * sin((val + 1) * (2*M_PI/radius));
 	new_vertex->point.second = radius * cos((val + 1) * (2*M_PI/radius));
-	
+	new_vertex->beer = random_bernoulli(beer_prob);
+	new_vertex->beer_edge = new BEdge(new_vertex, new_vertex);
 	return new_vertex;
 }
 
@@ -90,9 +121,8 @@ HalfEdge* add_edge(HalfEdge* h, Vertex* dest, Node* f1, Node* f2){
 	Vertex* src = h->target;
 	HalfEdge* h1 = new HalfEdge();
 	HalfEdge* h2 = new HalfEdge();
-	double euclidian_dist = sqrt((dest->point.first - src->point.first) * (dest->point.first - src->point.first) + 
-								(dest->point.second - src->point.second) * (dest->point.second - src->point.second));
-	h1->weight = h2->weight = euclidian_dist;
+	h1->weight = h2->weight = euclidean_dist(src, dest);
+	h1->beer_edge = h2->beer_edge = new BEdge(src, dest);
 	h1->twin = h2;
 	h2->twin = h1;
 	h1->target = dest;
@@ -114,8 +144,8 @@ HalfEdge* split_face(HalfEdge* h, Vertex* dest, Node* f1, Node* f2){
 	Vertex* src = h->target;
 	HalfEdge* h1 = new HalfEdge();
 	HalfEdge* h2 = new HalfEdge();
-	h1->weight = h2->weight = sqrt((dest->point.first - src->point.first) * (dest->point.first - src->point.first) + 
-								   (dest->point.second - src->point.second) * (dest->point.second - src->point.second));
+	h1->weight = h2->weight = euclidean_dist(src, dest);
+	h1->beer_edge = h2->beer_edge = new BEdge(src, dest);
 	h1->incident_face = f1;
 	h2->incident_face = f2;
 	if (f2 != NULL) f2->incident_edge = h2;
@@ -138,13 +168,13 @@ HalfEdge* split_face(HalfEdge* h, Vertex* dest, Node* f1, Node* f2){
 }
 
 
-HalfEdge* build_polygon(Node* root, int V){
-	Vertex* u = add_vertex(-1, V);
-	Vertex* v = add_vertex(0, V);
+HalfEdge* build_polygon(Node* root, int V, float beer_prob){
+	Vertex* u = add_vertex(-1, V, beer_prob);
+	Vertex* v = add_vertex(0, V, beer_prob);
 	HalfEdge* h1 = new HalfEdge();
 	HalfEdge* h2 = new HalfEdge();
-	h1->weight = h2->weight = sqrt((u->point.first - v->point.first) * (u->point.first - v->point.first) + 
-								(u->point.second - v->point.second) * (u->point.second - v->point.second));
+	h1->weight = h2->weight = euclidean_dist(u, v);
+	h1->beer_edge = h2->beer_edge = new BEdge(u, v);
 	h1->twin = h2;
 	h2->twin = h1;
 	h1->target = v;
@@ -158,24 +188,23 @@ HalfEdge* build_polygon(Node* root, int V){
 	h2->prev = h1;
 	
 	HalfEdge* root_edge = h1;
-	triangulate_polygon(root_edge, root, V);
+	triangulate_polygon(root_edge, root, V, beer_prob);
 
 	return root_edge;
 }
 
 
-void triangulate_polygon(HalfEdge* root_edge, Node* root, int V){
+void triangulate_polygon(HalfEdge* root_edge, Node* root, int V, float beer_prob){
 	if (root == NULL) return;
 
-	Vertex* v = add_vertex(root->data, V);
+	Vertex* v = add_vertex(root->data, V, beer_prob);
 	HalfEdge* new_root_edge;
-	// printf("Vertex %p   %d\n", v, v->data);
 
 	new_root_edge = add_edge(root_edge, v, root_edge->incident_face, root->left);
-	triangulate_polygon(new_root_edge->twin, root->left, V);
+	triangulate_polygon(new_root_edge->twin, root->left, V, beer_prob);
 
 	new_root_edge = split_face(new_root_edge, root_edge->prev->target, root_edge->incident_face, root->right);
-	triangulate_polygon(new_root_edge->twin, root->right, V);
+	triangulate_polygon(new_root_edge->twin, root->right, V, beer_prob);
 }
 
 
@@ -184,28 +213,51 @@ void triangulate_polygon(HalfEdge* root_edge, Node* root, int V){
 void vertex_traversal(HalfEdge* root_edge){
 	HalfEdge* e = root_edge->twin;
 	do {
-		printf("Vertex %p  %d\n", e->target, e->target->data);
-		printf("Edge %p  (%d, %d)  %.10f\n", e, e->prev->target->data, e->target->data, e->weight);
-		printf("Out edge %p  (%d, %d)  %.10f\n", e->target->out_edge, e->target->out_edge->prev->target->data, e->target->out_edge->target->data, 
-												 e->target->out_edge->weight);
-		printf("Face %p  %d\n\n", e->twin->incident_face, e->twin->incident_face->data);
+		printf("Vertex %d | beer? %d\n", e->target->data, e->target->beer);
+		printf("Edge (%d, %d)  %f\n", e->prev->target->data, e->target->data, e->weight);
+		printf("BEdge %d %f\n", e->target->data, e->target->beer_edge->distB);
+		printf("BEdge (%d, %d) %f\n", e->beer_edge->u->data, e->beer_edge->v->data, e->beer_edge->distB);
+		printf("Face %d\n\n", e->twin->incident_face->data);
 
 		e = e->next;
 	} while(e->target != root_edge->twin->target);
 }
 
-
 void face_traversal(Node* root){
 	if (root == NULL) return;
 	HalfEdge* e = root->incident_edge;
-	do {
-		printf("Vertex %p  %d\n", e->target, e->target->data);
-		printf("Edge %p  (%d, %d)  %f\n", e, e->prev->target->data, e->target->data, e->weight);
-		printf("Face %p  %d\n\n", e->incident_face, e->incident_face->data);
 
+	printf("Face %d\n", e->incident_face->data);
+	for (int i = 0; i < 3; i++){
+		printf("Vertex %d | beer? %d\n", e->target->data, e->target->beer);
+		printf("BEdge %d %f\n", e->target->data, e->target->beer_edge->distB);
+		printf("Edge (%d, %d)  %f\n", e->prev->target->data, e->target->data, e->weight);
+		printf("BEdge (%d, %d) %f\n", e->beer_edge->u->data, e->beer_edge->v->data, e->beer_edge->distB);
 		e = e->next;
-	} while(e->target != root->incident_edge->target);
+	}
+	cout << "\n";
 
 	face_traversal(root->left);
 	face_traversal(root->right);
+}
+
+void edge_traversal(HalfEdge* root_edge){
+	unordered_set<HalfEdge*> visited;
+	HalfEdge* traverse = root_edge->twin;
+	do {
+		Vertex* curr = traverse->target;
+		printf("\nVertex %d | beer? %d\n", traverse->target->data, traverse->target->beer);
+		printf("BEdge %d %f\n", traverse->target->data, traverse->target->beer_edge->distB);
+		for (auto i : curr->chain->v_chain){
+			auto found = visited.find(i.first);
+			auto found_twin = visited.find(i.first->twin);
+			if (found != visited.end() || found_twin != visited.end()) continue;
+
+			visited.insert(i.first);
+			printf("Edge (%d, %d)  %f\n", i.first->prev->target->data, i.first->target->data, i.first->weight);
+			printf("BEdge (%d, %d) %f\n", i.first->beer_edge->u->data, i.first->beer_edge->v->data, i.first->beer_edge->distB);
+			print_beer_path(i.first);
+		}
+		traverse = traverse->next;
+	} while (traverse != root_edge->twin);
 }
