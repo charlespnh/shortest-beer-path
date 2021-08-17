@@ -6,7 +6,8 @@
 
 using namespace std;
 
-#include "sp.h"
+#include "dag.h"
+#include "sssp.h"
 #include "../include/dcel.h"
 #include "../include/btree.h"
 #include "../include/lca.h"
@@ -15,6 +16,10 @@ using namespace std;
 void reset(DAG& dag){
 	for (auto i : dag){
 		i->col_vtx->p = NULL;
+		for (auto e : i->spes){
+			delete e.first;
+			delete e.second;
+		}
 		delete i;
 	}
 }
@@ -51,42 +56,9 @@ vector<vector<double> > floyd_warshall(HalfEdge* root_edge, int n){
 	return dist;
 } 
 
-
-int main(){
-	int V, N = 2000;
-	float beer_probability = 0.33;
-	struct lca* your_lca = new lca(N);
+void test_1(struct HalfEdge* root_edge, struct lca* your_lca, int V){
+	cout << "------------------------TEST I------------------------\n";
 	clock_t start = clock();
-	struct Node* root_node = generate_n_nodes_tree(N);
-	cout << "Generating balance binary tree took: " << (clock() - start) / (double) CLOCKS_PER_SEC << "\n\n";
-
-	your_lca->tree_depth = maxDepth(root_node);
-	int lDepth = maxDepth(root_node->left);
-	int rDepth = maxDepth(root_node->right);
-	cout << "Root: " << root_node->data << "\n";
-	cout << "Depth: " << your_lca->tree_depth << "\n";
-	cout << "lDepth: " << lDepth << "\n";
-	cout << "rDepth: " << rDepth << "\n\n";
-
-	N = inorder_label(root_node, 1) - 1;
-	V = N + 2;
-	cout << "Number of nodes: " << N << "\nNumber of vertices: " << V << "\n\n";
-	cout << "New root after inorder labelling: " << root_node->data << "\n\n";  
-
-	start = clock();
-	HalfEdge* root_edge = build_polygon(root_node, V, beer_probability);
-	cout << "Triangulation took: " << (clock() - start) / (double) CLOCKS_PER_SEC << " s\n";
-
-	precompute_lca(your_lca, root_node);
-	your_lca->preprocessing_duration = (clock() - your_lca->preprocessing_start ) / (double) CLOCKS_PER_SEC;
-    cout << "LCA preprossing took: " << your_lca->preprocessing_duration << " s\n";
-
-	start = clock();
-	preprocess_graph(root_edge, your_lca);
-	cout << "Graph preprocesing took: " << (clock() - start) / (double) CLOCKS_PER_SEC << " s\n";
-	// edge_traversal(root_edge);
-
-	start = clock();
 	vector<vector<double> > apsp = floyd_warshall(root_edge, V);
 	cout << "Floyd-Warshall APSP took: " << (clock() - start) / (double) CLOCKS_PER_SEC << " s\n\n";
 
@@ -109,11 +81,12 @@ int main(){
 			// double dist = shortest_path(src, dest, your_lca);
 			DAG dag = build_dag(src, dest, your_lca);
 			double dist = shortest_path_dag(dag);
+			double distB = shortest_beer_path_dag(dag);
 			time += (clock() - start) / (double) CLOCKS_PER_SEC;
-			if (!epsilon_equal(dist, apsp[src->data + 1][dest->data + 1])){
+			/* if (!epsilon_equal(dist, apsp[src->data + 1][dest->data + 1])){
 				cout << "dist found: " << dist << " | correct dist: " << apsp[src->data + 1][dest->data + 1] << " - FAILED\n";
 				return -1;
-			}
+			} */
 			tmp2 = tmp2->next;
 			reset(dag);
 			count++;
@@ -124,6 +97,103 @@ int main(){
 	cout << "Total number of paths (between non-adjacent vertices) checked: (n+2)P2 - 2(2n+1) = " << count << " - SUCCESS\n";
 	cout << "Total time taken to find " << count << " shortest paths: " << time << "\n";
 	cout << "Total number of beer stores: " << beer << "\n";
+}
+
+struct Vertex* get_vertex(struct HalfEdge* root, int v, struct lca* your_lca){
+	struct Vertex* vertex;
+	if (v == -1) vertex = root->twin->target;
+	else if (v == 0) vertex = root->target;
+	else vertex = get_lca(your_lca, v, v)->incident_edge->next->target;
+
+	return vertex;
+}
+
+void test_2(struct HalfEdge* root, int s, int d, struct lca* your_lca){
+	struct Vertex* src = get_vertex(root, s, your_lca);
+	struct Vertex* dest = get_vertex(root, d, your_lca);;
+
+	cout << "------------------------TEST II------------------------\n";
+	clock_t start = clock();
+	DAG dag = build_dag(src, dest, your_lca);
+	double dist = shortest_path_dag(dag);
+	double distB = shortest_beer_path_dag(dag);
+	cout << "Single-pair shortest path and beer path took: " << (clock() - start) / (double) CLOCKS_PER_SEC << " s\n";
+
+	reset(dag);
+}
+
+void test_3(struct HalfEdge* root, int s, struct lca* your_lca){
+	cout << "------------------------TEST III------------------------\n";
+	struct Vertex* src = get_vertex(root, s, your_lca);
+	clock_t start = clock();
+	sssp(get_inEdge(src));
+	cout << "Single-source shortest path took: " << (clock() - start) / (double) CLOCKS_PER_SEC << " s\n";
+
+	struct HalfEdge* traverse = root->twin;
+	do {
+		printf("\u03B4(%d, %d): ", s, traverse->target->data); 
+		vector<struct Vertex*> sssp = print_sssp(traverse->target);
+		for (auto v : sssp) cout << v->data << " ";		cout << "\n\n";
+
+		traverse = traverse->next;
+	} while(traverse != root->twin);
+}
+
+void test_4(struct HalfEdge* root, int s, struct lca* your_lca){
+	cout << "------------------------TEST IV------------------------\n";
+	struct Vertex* src = get_vertex(root, s, your_lca);
+	clock_t start = clock();
+	sssbp(get_inEdge(src));
+	cout << "Single-source shortest beer path took: " << (clock() - start) / (double) CLOCKS_PER_SEC << " s\n";
+
+	struct HalfEdge* traverse = root->twin;
+	do {
+		printf("\u03B4(%d, %d): ", s, traverse->target->data);
+		vector<struct Vertex*> sssbp = print_sssbp(traverse->target);
+		for (auto v : sssbp) cout << v->data << " ";	cout << "\n\n";
+
+		traverse = traverse->next;
+	} while(traverse != root->twin);
+}
+
+
+int main(){
+	int V, N = 18;
+	float beer_probability = 0.33;
+	clock_t start = clock();
+	struct Node* root_node = generate_n_nodes_tree(N);
+	cout << "Generating balance binary tree took: " << (clock() - start) / (double) CLOCKS_PER_SEC << "\n\n";
+
+	int lDepth = maxDepth(root_node->left);
+	int rDepth = maxDepth(root_node->right);
+	cout << "Depth: " << maxDepth(root_node) << "\n";
+	cout << "lDepth: " << lDepth << "\n";
+	cout << "rDepth: " << rDepth << "\n\n";
+
+	N = inorder_label(root_node, 1) - 1;
+	V = N + 2;
+	cout << "Number of nodes: " << N << "\nNumber of vertices: " << V << "\n\n";
+	cout << "New root after inorder labelling: " << root_node->iData << "\n\n";  
+
+	start = clock();
+	struct HalfEdge* root_edge = build_polygon(root_node, V, beer_probability);
+	cout << "Triangulation took: " << (clock() - start) / (double) CLOCKS_PER_SEC << " s\n";
+
+	struct lca* your_lca = new lca(N);
+	start = clock();
+	precompute_lca(your_lca, root_node);
+    cout << "LCA preprossing took: " << (clock() - start) / (double) CLOCKS_PER_SEC << " s\n";
+
+	start = clock();
+	preprocess_graph(root_edge, your_lca);
+	cout << "Graph preprocesing took: " << (clock() - start) / (double) CLOCKS_PER_SEC << " s\n\n";
+	// edge_traversal(root_edge);
+
+	// test_1(root_edge, your_lca, V);
+	test_2(root_edge, 0, 14, your_lca);
+	// test_3(root_edge, 1, your_lca);
+	// test_4(root_edge, 1, your_lca);
+
 	free_mem(root_node);
 	return 0;
 }
