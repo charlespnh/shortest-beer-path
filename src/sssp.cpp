@@ -1,24 +1,25 @@
 #include <algorithm>
-#include <string>
+#include <cstdlib>
 #include <cstdio>
 #include <iostream>
 
 using namespace std;
 
-#include "sssp.h"
-#include "../include/dcel.h"
-#include "../include/btree.h"
-#include "../include/beer.h"
+#include "../include/sssp.h"
+#include "../include/outerplanar.h"
+#include "../include/graph/dcel.h"
+#include "../include/preprocess/beer.h"
+#include "../include/utils.h"
 
 
-void preorder_traversal_sssp(struct HalfEdge* ab){
+void single_source::preorder_traversal_sssp(struct halfedge* ab){
 	if (ab->incident_face == NULL) return;
-	struct HalfEdge* ac = ab->prev;
-	struct HalfEdge* bc = ab->next;
+	struct halfedge* ac = ab->prev;
+	struct halfedge* bc = ab->next;
 
-	struct Vertex* a = ac->target;
-	struct Vertex* b = ab->target;
-	struct Vertex* c = bc->target;
+	struct vertex* a = ac->target;
+	struct vertex* b = ab->target;
+	struct vertex* c = bc->target;
 
 	c->dist = min(a->dist + ac->weight, b->dist + bc->weight);
 	if (c->dist == a->dist + ac->weight)
@@ -26,14 +27,17 @@ void preorder_traversal_sssp(struct HalfEdge* ab){
 	else
 		c->pred = b;
 
-	preorder_traversal_sssp(ac->twin);
-	preorder_traversal_sssp(bc->twin);
+	single_source::preorder_traversal_sssp(ac->twin);
+	single_source::preorder_traversal_sssp(bc->twin);
+	return;
 }
 
-void sssp(struct HalfEdge* root_e){
-	struct Vertex* s = root_e->target;
-	struct Vertex* a = root_e->prev->target;
-	struct Vertex* b = root_e->next->target;
+
+void single_source::sssp(struct halfedge* root_e){
+	clock_t start = clock();
+	struct vertex* s = root_e->target;
+	struct vertex* a = root_e->prev->target;
+	struct vertex* b = root_e->next->target;
 
 	s->dist = 0.0;
 	s->pred = NULL;
@@ -42,85 +46,101 @@ void sssp(struct HalfEdge* root_e){
 	a->pred = b->pred = s;
 
 	for (int i = 0; i < 3; i++){
-		preorder_traversal_sssp(root_e->twin);
+		single_source::preorder_traversal_sssp(root_e->twin);
 		root_e = root_e->next;
 	}
+
+	single_source::sssp_duration = (clock() - start) / (double) CLOCKS_PER_SEC;
+	return;
 }
 
-void preorder_traversal_sssbp(struct HalfEdge* ab){
+
+
+
+void single_source::preorder_traversal_sssbp(struct halfedge* ab){
 	if (ab->incident_face == NULL) return;
-	struct HalfEdge* ac = ab->prev;
-	struct HalfEdge* bc = ab->next;
-	struct Vertex* a = ac->target;
-	struct Vertex* b = ab->target;
-	struct Vertex* c = bc->target;
+	struct halfedge* ac = ab->prev;
+	struct halfedge* bc = ab->next;
+	struct vertex* a = ac->target;
+	struct vertex* b = ab->target;
+	struct vertex* c = bc->target;
 
 	c->distB = min(min(a->dist + ac->beer_edge->distB, b->dist + bc->beer_edge->distB),
 				   min(a->distB + ac->weight, b->distB + bc->weight));
 	if (c->distB == a->dist + ac->beer_edge->distB)
-		c->predB = make_pair(ac, 1);
+		c->predB = make_pair(a, 1);
 	else if (c->distB == b->dist + bc->beer_edge->distB)
-		c->predB = make_pair(bc, 1);
+		c->predB = make_pair(b, 1);
 	else if (c->distB == a->distB + ac->weight)
-		c->predB = make_pair(ac, 0);
+		c->predB = make_pair(a, 0);
 	else 
-		c->predB = make_pair(bc, 0);
+		c->predB = make_pair(b, 0);
 
-	preorder_traversal_sssbp(ac->twin);
-	preorder_traversal_sssbp(bc->twin);
+	single_source::preorder_traversal_sssbp(ac->twin);
+	single_source::preorder_traversal_sssbp(bc->twin);
+	return;
 }
 
-void sssbp(struct HalfEdge* root_e){
-	struct Vertex* s = root_e->target;	
-	struct Vertex* a = root_e->prev->target;
-	struct Vertex* b = root_e->next->target;
+
+void single_source::sssbp(struct halfedge* root_e){
+	clock_t start = clock();
+	struct vertex* s = root_e->target;	
+	struct vertex* a = root_e->prev->target;
+	struct vertex* b = root_e->next->target;
 
 	s->distB = s->beer_edge->distB;
-	s->predB = make_pair((struct HalfEdge*) NULL, 1);
+	s->predB = NIL;
 	a->distB = root_e->beer_edge->distB;
-	a->predB = make_pair(root_e, 1);
+	a->predB = make_pair(s, 1);
 	b->distB = root_e->next->beer_edge->distB;
-	b->predB = make_pair(root_e->next, 1);
+	b->predB = make_pair(s, 1);
 
 	for (int i = 0; i < 3; i++){
-		preorder_traversal_sssbp(root_e->twin);
+		single_source::preorder_traversal_sssbp(root_e->twin);
 		root_e = root_e->next;
 	}
+
+	single_source::sssbp_duration = (clock() - start) / (double) CLOCKS_PER_SEC;
+	return;
 }
 
 
 
-vector<struct Vertex*> print_sssp(struct Vertex* v){
-	vector<struct Vertex*> spath;
+
+
+vector<struct vertex*> single_source::print_sssp(struct vertex* v){
+	vector<struct vertex*> spath;
 	if (v == NULL) return spath;
 	
-	spath = print_sssp(v->pred);
+	spath = single_source::print_sssp(v->pred);
 	spath.push_back(v);
 	return spath;
 }
 
-vector<struct Vertex*> print_sssbp(struct Vertex* v){
-	return print_sssbp_subpath(v);
+
+
+vector<struct vertex*> single_source::print_sssbp(struct vertex* v){
+	vector<struct vertex*> path = single_source::print_sssbp_subpath(v);
+	return path_union(path);
 }
 
-vector<struct Vertex*> print_sssbp_subpath(struct Vertex* v){
-	vector<struct Vertex*> pathB;
-	auto [subPath, beerLoc] = v->predB;
-	if (subPath == NULL) return pathB;
 
-	vector<struct Vertex*> subPathB;
-	struct Vertex* w = (subPath->target != v) ? subPath->target : subPath->prev->target;
+vector<struct vertex*> single_source::print_sssbp_subpath(struct vertex* v){
+	vector<struct vertex*> pathB;
+	auto [w, beerLoc] = v->predB;
+	if (w == NULL) return pathB;
 
-	if (beerLoc){
-		subPathB = print_beer_path(subPath->beer_edge);
-		pathB = print_sssp(w);
+	vector<struct vertex*> subPathB;
+
+	if (beerLoc == 1){
+		subPathB = beer::print_beer_path(graph::get_edge(w, v));
+		pathB = single_source::print_sssp(w);
 	}
 	else{
 		subPathB = {w, v};
-		pathB = print_sssbp_subpath(w);
+		pathB = single_source::print_sssbp_subpath(w);
 	}
 
-	if (pathB.back() != subPathB[0]) reverse(subPathB.begin(), subPathB.end());
 	pathB.insert(pathB.end(), subPathB.begin(), subPathB.end());
 	return pathB;
 }

@@ -1,463 +1,423 @@
 #include <algorithm>
 #include <vector>
 #include <string>
-#include <tuple>
 #include <utility>
 #include <limits>
-#include <cstdlib>
+#include <cstdio>
 #include <iostream>
 
 using namespace std;
 
-#include "dag.h"
-#include "../include/dcel.h"
-#include "../include/btree.h"
-#include "../include/lca.h"
+#include "../include/dag.h"
+#include "../include/outerplanar.h"
+#include "../include/graph/dcel.h"
+#include "../include/preprocess/beer.h"
+#include "../include/preprocess/lca.h"
 #include "../include/utils.h"
 
 
-struct SPEdge* getEdge(struct DAGVertex* u, struct DAGVertex* v){
-	if (u->spes[0].first->dest == v->col_vtx)
-		return u->spes[0].first;
-	else if (u->spes[1].first->dest == v->col_vtx)
-		return u->spes[1].first;
+/*################################## get methods ###################################################*/
+
+struct d_edge* dag::getDEdge(struct vertex* u, struct vertex* v){
+	for (auto e : u->dag_edges)
+		if (e.first->dest == v) return e.first;
 	return NULL;
 }
 
-// index - position of vertex u
-// subpath (u -> v) - travel along the apex's chain with index until reached vertex v
-string print_sp_on_chain(struct Vertex* v, struct Vertex* apex, int index){
-	string path = "";
-	struct Vertex* u;
-	if (index < 0){		// ccw
-		index = abs(index);
-		u = apex->chain->v_chain[index].first->prev->target;
-		while(u != v) {
-			u = apex->chain->v_chain[--index].first->prev->target;
-			cout << u->data << " ";
-			path += to_string(u->data) + " ";
+
+struct d_edge* dag::getDBEdge(struct vertex* u, struct vertex* v){
+	for (auto e : u->dag_edges)
+		if (e.second->dest == v) return e.second;
+	return NULL;
+}
+
+
+double dag::weight(struct vertex* u, struct vertex* v){
+	struct d_edge* uv = dag::getDEdge(u, v);
+	if (uv) return uv->weight;
+	return INF;
+}
+
+
+double dag::weightB(struct vertex* u, struct vertex* v){
+	struct d_edge* uv = dag::getDBEdge(u, v);
+	if (uv) return uv->weight;
+	return INF;
+}
+
+
+pair<struct vertex*, int> dag::omega(struct d_edge* e){
+	return e->subpath;
+}
+
+
+
+/*############################### print shortest path methods ######################################*/
+
+// subpath v1 to v2 - travel along apex's chain
+vector<struct vertex*> print_subpath_on_chain(struct vertex* apex, struct vertex* v1, struct vertex* v2){
+	vector<struct vertex*> path;
+	struct vertex* u = v1;
+	int index1 = dcel::apex_index(graph::get_edge(v1, apex));
+	int index2 = dcel::apex_index(graph::get_edge(v2, apex));
+
+	if (index1 < index2){		// cw
+		while(u != v2){
+			u = dcel::neighbour(apex, ++index1);
+			path.push_back(u);
 		}
 	}
-	else {				// cw
-		u = apex->chain->v_chain[index].first->prev->target;
-		while(u != v) {
-			u = apex->chain->v_chain[++index].first->prev->target;
-			cout << u->data << " ";
-			path += to_string(u->data) + " ";
+	else {						// ccw
+		while(u != v2){
+			u = dcel::neighbour(apex, --index1);
+			path.push_back(u);
 		}
 	}
+
 	return path;
 }
 
 
-void print_sp_dag(Vertex* v){
- 	if (v->p == NULL) {
- 		cout << "shortest path: " << v->data << " ";
- 		return;
+vector<struct vertex*> dag::print_subpath_dag(struct vertex* pred, struct vertex* v){
+	vector<struct vertex*> path;
+ 	struct d_edge* d_edge = dag::getDEdge(pred, v);
+ 	auto [apex, direction] = d_edge->subpath;
+ 	
+ 	// DAG edge is an edge in graph G
+ 	if (apex == NULL) 
+ 		path = {v};
+ 	// 
+ 	else {
+ 		// walk cross apex
+ 		if (direction == 0)
+ 			path = {apex, v};
+ 		// walk cw along apex v_chain
+ 		else
+ 			path = print_subpath_on_chain(apex, pred, v);
  	}
- 	print_sp_dag(v->p->src);
- 
- 	struct Vertex* apex = v->p->cross_apex;
- 	// cross apex (not on v_chain)
- 	if (v->p->cw == MAX){
- 		if (apex != v->p->src && apex != v->p->dest)
- 			cout << apex->data << " ";
- 		cout << v->data << " "; 
- 	}
- 	// walk along apex's chain
- 	else 
- 		print_sp_on_chain(v, apex, v->p->cw);
+
+ 	return path;
 }
 
-void print_sbp_dag(DAGVertex* v){
-	auto [w, subPath, beerLoc] = v->b;
-	if (w == NULL){
-		cout << "shortest beer path: " << v->col_vtx->data << " ";
-		return;
-	}
-	print_sbp_dag(w);
+
+vector<struct vertex*> dag::print_spsp_dag(struct vertex* v){
+	vector<struct vertex*> path;
+
+ 	if (dcel::pred(v) == NULL){
+ 		path = {v};
+ 		return path;
+ 	}
+ 	
+ 	path = dag::print_spsp_dag(dcel::pred(v));
+ 	vector<struct vertex*> subpath = dag::print_subpath_dag(dcel::pred(v), v);
+ 	path.insert(path.end(), subpath.begin(), subpath.end());
+ 	return path;
+}
+
+
+
+vector<struct vertex*> dag::print_subpathB_dag(struct vertex* v){
+	vector<struct vertex*> pathB, subpathB;
+	auto [w, beerLoc] = dcel::predB(v);
+	if (w == NULL) return pathB;
 
 	// just a normal shortest subpath
-	if (subPath == NULL){
-		struct SPEdge* sub_path = getEdge(w, v);
-		struct Vertex* apex = sub_path->cross_apex;
-		int index = sub_path->cw;
-		if (index == MAX){
- 			if (apex != sub_path->src && apex != sub_path->dest)
- 				cout << apex->data << " ";
- 			cout << v->col_vtx->data << " "; 
- 		}
- 		else
-	 		print_sp_on_chain(v->col_vtx, apex, index);
+	if (beerLoc == 0){
+		pathB = dag::print_spsbp_dag(w);
+		subpathB = dag::print_subpath_dag(w, v);
 	}
 
 	// shortest beer subpath
 	else{
-		auto [c, subPathB, i] = subPath->pathB;
-		// "an edge"
-		if (i == MAX)
-			print_beer_path(subPathB);
+		pathB = dag::print_spsp_dag(w);
+		auto [b, direction] = dag::omega(dag::getDBEdge(w, v));
 
-		// on chain
-		else if (subPathB->apex.first == c){
-			cout << "\tDEBUGGING " << w->col_vtx->data << " and " << c->data << " and " << i << "\n";
-			print_sp_on_chain(w->col_vtx, c, 0 - i);
-			print_beer_path(c->chain->v_chain[abs(i)].first->prev);
-			print_sp_on_chain(v->col_vtx, c, i - 1);
+		// "an edge" in G
+		if (b == NULL)
+			subpathB = beer::print_beer_path(graph::get_edge(w, v));
+
+		// on chain apex b
+		else if (direction >= 0){
+			vector<struct vertex*> beer_edge;
+			struct vertex* neigh1 = dcel::neighbour(b, direction);
+			struct vertex* neigh2 = dcel::neighbour(b, direction + 1);
+			// if ccw
+			if (dcel::apex_index(graph::get_edge(w, b)) > dcel::apex_index(graph::get_edge(neigh1, b)))
+				// now cw
+				swap(neigh1, neigh2);
+
+			subpathB = print_subpath_on_chain(b, w, neigh1);
+			beer_edge = beer::print_beer_path(graph::get_edge(neigh1, neigh2));
+
+			subpathB.insert(subpathB.end(), beer_edge.begin(), beer_edge.end());
+			pathB.insert(pathB.end(), subpathB.begin(), subpathB.end());
+
+			subpathB = print_subpath_on_chain(b, neigh2, v);
 		}
 
-		// cross apex
-		else{
-			// 1st path is beer subpath
-			if (i == 0){
-				print_beer_path(subPathB);
-				cout << v->col_vtx->data;
+		// cross apex b
+		else {
+			// 1st edge is beer path
+			if (direction == -1){
+				subpathB = beer::print_beer_path(graph::get_edge(w, b));
+				subpathB.push_back(v);
 			}
 
-			// 2nd path is beer subpath
-			else{
-				cout << w->col_vtx->data;
-				print_beer_path(subPathB);
-			}
+			// 2nd edge is beer path
+			else
+				subpathB = beer::print_beer_path(graph::get_edge(b, v));
 		}
 	}
+
+	pathB.insert(pathB.end(), subpathB.begin(), subpathB.end());
+	return pathB;
 }
 
-double shortest_path(struct Vertex* src, struct Vertex* dest, struct lca* your_lca){
-	// cout << "Src " << src->data << " and sink " << dest->data << "\n";
-	DAG dag = build_dag(src, dest, your_lca);
-	double dist = shortest_path_dag(dag);
-	// print_sp_dag(dest);		cout << "\n\n";
-	// double distB = shortest_beer_path_dag(dag);
-	// print_sbp_dag(dest);		cout << "\n\n";
-	return dist;
+
+vector<struct vertex*> dag::print_spsbp_dag(struct vertex* v){
+	vector<struct vertex*> pathB = dag::print_subpathB_dag(v);
+	return path_union(pathB);
 }
 
-double shortest_path_dag(DAG& dag){
-	dag[1]->dist = dag[0]->spes[0].first->sp_weight;
-	dag[1]->col_vtx->p = dag[0]->spes[0].first;
-	dag[2]->dist = dag[0]->spes[1].first->sp_weight;
-	dag[2]->col_vtx->p = dag[0]->spes[1].first;
 
-	int j = 0;
-	for (int i = 3; i < dag.size(); i++){
-		int prev_col = dag[i]->col_vtx->col - 1;
-		dag[i]->dist = min(dag[2*prev_col-1]->dist + dag[2*prev_col-1]->spes[j].first->sp_weight,
-						   dag[2*prev_col]->dist + dag[2*prev_col]->spes[j].first->sp_weight);
-		if (dag[i]->dist == dag[2*prev_col-1]->dist + dag[2*prev_col-1]->spes[j].first->sp_weight)
-			dag[i]->col_vtx->p = dag[2*prev_col-1]->spes[j].first;
-		else dag[i]->col_vtx->p = dag[2*prev_col]->spes[j].first;
 
-		j = !j;
+/*############################ dynamic programming - get shortest path methods #########################*/
+
+void dag::shortest_path_dag(){
+	clock_t start = clock();
+	mDAG[1]->dist = dag::weight(mDAG[0], mDAG[1]);
+	mDAG[2]->dist = dag::weight(mDAG[0], mDAG[2]);
+	mDAG[1]->pred = mDAG[2]->pred = mDAG[0];
+
+	for (int i = 3, j = 0; i < mDAG.size(); i++, j = !j){
+		mDAG[i]->dist = min(dcel::dist(mDAG[i - j - 1]) + dag::weight(mDAG[i - j - 1], mDAG[i]),
+						   dcel::dist(mDAG[i - j - 2]) + dag::weight(mDAG[i - j - 2], mDAG[i]));
+
+		if (mDAG[i]->dist == dcel::dist(mDAG[i - j - 1]) + dag::weight(mDAG[i - j - 1], mDAG[i]))
+			mDAG[i]->pred = mDAG[i - j - 1];
+		else mDAG[i]->pred = mDAG[i - j - 2];
 	}
 
-	return 0.0;
+	spsp_duration = (clock() - start) / (double) CLOCKS_PER_SEC;
+	return;
 }
 
-double shortest_beer_path_dag(DAG& dag){
-	dag[0]->b = make_tuple((struct DAGVertex*) NULL, (struct SPBEdge*) NULL, 0);
-	dag[1]->distB = dag[0]->dist + dag[0]->spes[0].second->sp_bweight;
-	dag[1]->b = make_tuple(dag[0], (struct SPBEdge*) NULL, 0);
-	dag[2]->distB = dag[0]->dist + dag[0]->spes[1].second->sp_bweight;
-	dag[2]->b = make_tuple(dag[0], (struct SPBEdge*) NULL, 0);
+void dag::shortest_beer_path_dag(){
+	clock_t start = clock();
+	mDAG[1]->distB = dcel::dist(mDAG[0]) + dag::weightB(mDAG[0], mDAG[1]);
+	mDAG[2]->distB = dcel::dist(mDAG[0]) + dag::weightB(mDAG[0], mDAG[2]);
+	mDAG[1]->predB = mDAG[2]->predB = make_pair(mDAG[0], 1);
 
-	int j = 0;
-	for (int i = 3; i < dag.size(); i++){
-		int prev_col = dag[i]->col_vtx->col - 1;
-		dag[i]->distB = min(min(dag[2*prev_col-1]->distB + dag[2*prev_col-1]->spes[j].first->sp_weight, dag[2*prev_col-1]->dist + dag[2*prev_col-1]->spes[j].second->sp_bweight),
-						    min(dag[2*prev_col]->distB + dag[2*prev_col]->spes[j].first->sp_weight, dag[2*prev_col]->dist + dag[2*prev_col]->spes[j].second->sp_bweight));
+	for (int i = 3, j = 0; i < mDAG.size(); i++, j = !j){
+		mDAG[i]->distB = min(min(dcel::distB(mDAG[i - j - 1]) + dag::weight(mDAG[i - j - 1], mDAG[i]), dcel::dist(mDAG[i - j - 1]) + dag::weightB(mDAG[i - j - 1], mDAG[i])),
+						     min(dcel::distB(mDAG[i - j - 2]) + dag::weight(mDAG[i - j - 2], mDAG[i]), dcel::dist(mDAG[i - j - 2]) + dag::weightB(mDAG[i - j - 2], mDAG[i])));
 
-		if (dag[i]->distB == dag[2*prev_col-1]->distB + dag[2*prev_col-1]->spes[j].first->sp_weight)
-			dag[i]->b = make_tuple(dag[2*prev_col-1], (struct SPBEdge*) NULL, 0);
-		else if (dag[i]->distB == dag[2*prev_col]->distB + dag[2*prev_col]->spes[j].first->sp_weight)
-			dag[i]->b = make_tuple(dag[2*prev_col], (struct SPBEdge*) NULL, 0);
-		else if (dag[i]->distB == dag[2*prev_col-1]->dist + dag[2*prev_col-1]->spes[j].second->sp_bweight)
-			dag[i]->b = make_tuple(dag[2*prev_col-1], dag[2*prev_col-1]->spes[j].second, 1);
-		else dag[i]->b = make_tuple(dag[2*prev_col], dag[2*prev_col]->spes[j].second, 1);
+		if (dcel::distB(mDAG[i]) == dcel::distB(mDAG[i - j - 1]) + dag::weight(mDAG[i - j - 1], mDAG[i]))
+			mDAG[i]->predB = make_pair(mDAG[i - j - 1], 0);
+		else if (dcel::distB(mDAG[i]) == dcel::distB(mDAG[i - j - 2]) + dag::weight(mDAG[i - j - 2], mDAG[i]))
+			mDAG[i]->predB = make_pair(mDAG[i - j - 2], 0);
+		else if (dcel::distB(mDAG[i]) == dcel::dist(mDAG[i - j - 1]) + dag::weightB(mDAG[i - j - 1], mDAG[i]))
+			mDAG[i]->predB = make_pair(mDAG[i - j - 1], 1);
+		else mDAG[i]->predB = make_pair(mDAG[i - j - 2], 1);
 
-		j = !j;
 	}
 
-	printf("Src %d -> sink %d\n", dag[0]->col_vtx->data, dag.back()->col_vtx->data);
-	print_sp_dag(dag.back()->col_vtx);	cout << "\n";
-	print_sbp_dag(dag.back()); cout << "\n\n";
-	for (auto v : dag){
-		printf("DAGVertex %d | col %d | p (%d, %d) | ", v->col_vtx->data, v->col_vtx->col, 
-													(v->col_vtx->p) ? v->col_vtx->p->src->data : MAX,
-													(v->col_vtx->p) ? v->col_vtx->p->dest->data : MAX);
-		printf("b (%d, (%d, %d), %d)\n", (get<0>(v->b)) ? get<0>(v->b)->col_vtx->data : MAX, 
-										 (get<1>(v->b)) ? get<1>(v->b)->src->data : MAX, (get<1>(v->b)) ? get<1>(v->b)->dest->data : MAX, get<2>(v->b));
-		for (auto e : v->spes){
-			printf("SPEdge (%d, %d) | w %f | on chain vtx %d | index %d\n", e.first->src->data, e.first->dest->data, 
-																	   e.first->sp_weight, e.first->cross_apex->data, e.first->cw);
-			printf("SPBEdge (%d, %d) | w %f | on chain vtx %d | index %d | ", e.second->src->data, e.second->dest->data,
-																		 e.second->sp_bweight, get<0>(e.second->pathB)->data, get<2>(e.second->pathB));
-			print_beer_path(get<1>(e.second->pathB));	cout << "\n";
-		}
-		cout << "\n";
-	}
-	return dag.back()->distB;
+	spsbp_duration = (clock() - start) / (double) CLOCKS_PER_SEC;
+	return;
 }
 
 
-DAGEdges compute_dag_edges_on_chain(Vertex* col_vtx, HalfEdge* next_col_edge){
-	// DAG shortest path edges - computing spes[0] and spes[1]
-	struct SPEdge* sp_e1 = new SPEdge(col_vtx, next_col_edge->target);
-	struct SPEdge* sp_e2 = new SPEdge(col_vtx, next_col_edge->prev->target);
-	sp_e1->sp_weight = next_col_edge->next->weight;
-	sp_e2->sp_weight = next_col_edge->prev->weight;
-	sp_e1->cross_apex = sp_e2->cross_apex = col_vtx;
+
+/*################################ build dag methods #####################################################*/
+
+struct d_edge* dag::compute_spedge_on_chain(struct vertex* apex, struct vertex* u, struct vertex* v){
+	int index1 = dcel::apex_index(graph::get_edge(u, apex));
+	int index2 = dcel::apex_index(graph::get_edge(v, apex));
+	struct d_edge* sp_e = new d_edge(v);
+
+	double path_weight_on_chain, path_weight_cross_apex;
+
+	/* DAG shortest path edge */
+	path_weight_on_chain = abs(dcel::dist2cw(apex, index1) - dcel::dist2cw(apex, index2));
+	path_weight_cross_apex = dcel::weight(graph::get_edge(u, apex)) + dcel::weight(graph::get_edge(apex, v));
+	sp_e->weight = min(path_weight_on_chain, path_weight_cross_apex);
+
+	if (sp_e->weight == path_weight_on_chain)
+		sp_e->subpath = make_pair(apex, 1);					// 1 if SP is on apex's chain
+	else sp_e->subpath = make_pair(apex, 0);				// 0 is SP is crossing apex
+
+	return sp_e;
+}
+
+
+struct d_edge* dag::compute_spbedge_on_chain(struct vertex* apex, struct vertex* u, struct vertex* v){
+	struct halfedge* u2apex = graph::get_edge(u, apex);
+	struct halfedge* v2apex = graph::get_edge(v, apex);
+	int index1 = dcel::apex_index(u2apex);
+	int index2 = dcel::apex_index(v2apex);
+
+	struct d_edge* sp_be = new d_edge(v);
+
+	/* DAG shortest path beer edge */
+	struct lca* lca_chain = apex->lca_Av_chain;
+	struct node* Av_smallest;
+	// cw on chain
+	if (index1 < index2)
+		Av_smallest = get_lca(lca_chain, index1, index2 - 1); 
+	// ccw on chain
+	else Av_smallest = get_lca(lca_chain, index1 - 1, index2);
+
+
+	double path_weight_on_chain, path_weight_cross_apex;
+	path_weight_on_chain = abs(dcel::dist2cw(apex, index1) - dcel::dist2cw(apex, index2)) + dcel::dData(Av_smallest);
+	path_weight_cross_apex = min(beer::weightB(u2apex) + dcel::weight(v2apex),
+								 dcel::weight(u2apex) + beer::weightB(v2apex));
+	sp_be->weight = min(path_weight_on_chain, path_weight_cross_apex);
+
+	// if SP is on chain
+	if (sp_be->weight == path_weight_on_chain)
+		sp_be->subpath = make_pair(apex, dcel::iData(Av_smallest));
+
+	// else SP is crossing apex
+	else{
+		if (sp_be->weight == beer::weightB(u2apex) + dcel::weight(v2apex))
+			sp_be->subpath = make_pair(apex, -1);				// 1st edge "cross apex" is the beer path
+		else
+			sp_be->subpath = make_pair(apex, -2);				// 2nd edge "cross apex" is the beer path
+	}
+
+	return sp_be;
+}
+
+
+DAGEdges dag::compute_dag_edges_on_chain(struct vertex* col_vtx, struct halfedge* col_edge){
+	struct vertex* apexv = dcel::apex(col_edge);
+
+	struct d_edge* sp_e1 = compute_spedge_on_chain(apexv, col_vtx, dcel::target(col_edge));
+	struct d_edge* sp_be1 = compute_spbedge_on_chain(apexv, col_vtx, dcel::target(col_edge));
+	
+	struct d_edge* sp_e2 = compute_spedge_on_chain(apexv, col_vtx, dcel::origin(col_edge));
+	struct d_edge* sp_be2 = compute_spbedge_on_chain(apexv, col_vtx, dcel::origin(col_edge));
+
+	return {make_pair(sp_e1, sp_be1), make_pair(sp_e2, sp_be2)};
+}
+
+
+DAGEdges dag::compute_dag_edges_off_chain(struct vertex* col_vtx, struct halfedge* col_edge){
+	// DAG shortest path edges
+	struct d_edge* sp_e1 = new d_edge(dcel::target(col_edge));
+	struct d_edge* sp_e2 = new d_edge(dcel::origin(col_edge));
+	sp_e1->weight = dcel::weight(dcel::next(col_edge));
+	sp_e2->weight = dcel::weight(dcel::prev(col_edge));
 
 	// DAG shortest path beer edges
-	struct SPBEdge* sp_be1 = new SPBEdge(col_vtx, next_col_edge->target);
-	struct SPBEdge* sp_be2 = new SPBEdge(col_vtx, next_col_edge->prev->target);
-	sp_be1->sp_bweight = next_col_edge->next->beer_edge->distB;
-	sp_be2->sp_bweight = next_col_edge->prev->beer_edge->distB;
-	// sp_be1->cross_apex = sp_be2->cross_apex = col_vtx;
-	sp_be1->pathB = make_tuple(col_vtx, next_col_edge->next, MAX);
-	sp_be2->pathB = make_tuple(col_vtx, next_col_edge->prev, MAX);
+	struct d_edge* sp_be1 = new d_edge(dcel::target(col_edge));
+	struct d_edge* sp_be2 = new d_edge(dcel::origin(col_edge));
+	sp_be1->weight = beer::weightB(dcel::next(col_edge));
+	sp_be2->weight = beer::weightB(dcel::prev(col_edge));
 
 	return {make_pair(sp_e1, sp_be1), make_pair(sp_e2, sp_be2)};
 }
 
 
-DAGEdges compute_dag_edges_off_chain(Vertex* col_vtx, HalfEdge* col_edge, HalfEdge* next_col_edge){
-	struct SPEdge* sp_e1 = new SPEdge(col_vtx, next_col_edge->target);
-	struct SPEdge* sp_e2 = new SPEdge(col_vtx, next_col_edge->prev->target);
-	struct SPBEdge* sp_be1 = new SPBEdge(col_vtx, next_col_edge->target);
-	struct SPBEdge* sp_be2 = new SPBEdge(col_vtx, next_col_edge->prev->target);
-	int index1 = col_edge->prev->apex.second;		// "src" - (u_i <- u_i+1) - vtx u_i on chain at index i = index1
-	int index2 = next_col_edge->apex.second;		// "dest" - (a_i <- a_i+1) - vtx a_i on chain at index i = index2
-	double path_weight_on_chain, path_weight_cross_apex;
-	struct Chain* chain = next_col_edge->apex.first->chain;
 
-	/*DAG shortest path edge - computing spes[2]*/
-	path_weight_on_chain = chain->v_chain[index1].second - chain->v_chain[index2].second; 
-	path_weight_cross_apex = col_edge->weight + next_col_edge->next->weight;
-	sp_e1->sp_weight = min(abs(path_weight_on_chain), path_weight_cross_apex);
-	if (sp_e1->sp_weight == abs(path_weight_on_chain))
-		sp_e1->cw = (index1 < index2) ? index1 : -index1;
-
-	/*DAG shortest path beer edge*/
-	struct lca* lca_chain = chain->lca_chain_Av;
-	struct Node* index;
-	// ccw on chain
-	if (sp_e1->cw < 0) 
-		index = get_lca(lca_chain, index1 - 1, index2);
-	// cw on chain
-	else index = get_lca(lca_chain, index1, index2 - 1);
-	// index = get_lca(lca_chain, index1 - 1, index2);
-	path_weight_on_chain += index->dData;
-	path_weight_cross_apex = min(col_edge->beer_edge->distB + next_col_edge->next->weight,
-								 col_edge->weight + next_col_edge->next->beer_edge->distB);
-	sp_be1->sp_bweight = min(abs(path_weight_on_chain), path_weight_cross_apex);
-	sp_be1->pathB = make_tuple(next_col_edge->apex.first, (struct HalfEdge*) NULL, MAX);
-	if (sp_be1->sp_bweight == abs(path_weight_on_chain)){
-		get<1>(sp_be1->pathB) = chain->v_chain[index->iData].first->prev;		// get the beer edge "on chain" path that SPB took
-		get<2>(sp_be1->pathB) = (index1 < index2) ? index->iData : -index->iData;
-	}	
-	else{
-		if (sp_be1->sp_bweight == col_edge->beer_edge->distB + next_col_edge->next->weight){
-			get<1>(sp_be1->pathB) = col_edge;		// get the beer edge "cross apex" path that SPB took
-			get<2>(sp_be1->pathB) = 0;				// 1st edge "cross apex" is the beer path
-		}
-		else{
-			get<1>(sp_be1->pathB) = next_col_edge->next;
-			get<2>(sp_be1->pathB) = 1;				// 2nd edge "cross apex" is the beer path
-		}
+// Adding DAG column vertices at ith column  -  col_edge is at (i+1)th col
+void dag::compute_dag_edges(struct vertex* col_vtx1, struct vertex* col_vtx2, struct halfedge* col_edge){
+	if (col_vtx1 == dcel::apex(col_edge)){		// halfedge col_edge now faces vertex col_vtx1
+		col_vtx1->dag_edges = dag::compute_dag_edges_off_chain(col_vtx1, col_edge);			//
+		col_vtx2->dag_edges = dag::compute_dag_edges_on_chain(col_vtx2, col_edge);			//
 	}
-	
-	/*DAG shortest path edge - computing spes[3]*/
-	path_weight_on_chain = chain->v_chain[index1].second - chain->v_chain[index2 + 1].second;
-	path_weight_cross_apex = col_edge->weight + next_col_edge->prev->weight;
-	sp_e2->sp_weight = min(abs(path_weight_on_chain), path_weight_cross_apex);
-	if (sp_e2->sp_weight == abs(path_weight_on_chain))
-		sp_e2->cw = (index1 < index2 + 1) ? index1 : -index1;
+	else{	
+		col_vtx1->dag_edges = dag::compute_dag_edges_on_chain(col_vtx1, col_edge);
+		col_vtx2->dag_edges = dag::compute_dag_edges_off_chain(col_vtx2, col_edge);
+	} 
 
-	/*DAG shortest path beer edge*/
-	if (sp_e2->cw < 0)
-		index = get_lca(lca_chain, index1 - 1, index2 + 1);
-	else index = get_lca(lca_chain, index1, index2);
-	// index = get_lca(lca_chain, index1 - 1, index2);
-	path_weight_on_chain += index->dData;
-	path_weight_cross_apex = min(col_edge->beer_edge->distB + next_col_edge->next->weight,
-								 col_edge->weight + next_col_edge->next->beer_edge->distB);
-	sp_be2->sp_bweight = min(abs(path_weight_on_chain), path_weight_cross_apex);
-	sp_be2->pathB = make_tuple(next_col_edge->apex.first, (struct HalfEdge*) NULL, MAX);
-	if (sp_be2->sp_bweight == abs(path_weight_on_chain)){
-		get<1>(sp_be2->pathB) = chain->v_chain[index->iData].first->prev;
-		get<2>(sp_be2->pathB) = (index1 < index2) ? index->iData : -index->iData;
-	}	
-	else{
-		if (sp_be2->sp_bweight == col_edge->beer_edge->distB + next_col_edge->next->weight){
-			get<1>(sp_be2->pathB) = col_edge;
-			get<2>(sp_be2->pathB) = 0;
-		}
-		else{
-			get<1>(sp_be2->pathB) = next_col_edge->next;
-			get<2>(sp_be2->pathB) = 1;
-		}
-	}
-
-	sp_e1->cross_apex = sp_e2->cross_apex = next_col_edge->apex.first;
-	// sp_be1->cross_apex = sp_be2->cross_apex = next_col_edge->apex.first;
-	return {make_pair(sp_e1, sp_be1), make_pair(sp_e2, sp_be2)};
-}
-
-
-// HalfEdge dag is the one to be put into DAG column!
-void compute_dag_edges(DAG& dag_graph, HalfEdge* dag, HalfEdge* next_dag, Vertex* sink = NULL){
-	Vertex* apex_u = dag->target;
-	Vertex* apex_v = dag->prev->target;
-	// next_dag (now) belongs to apex_u's chain
-	bool swapped = false;
-	if (next_dag->apex.first != apex_u){
-		swap(apex_u, apex_v);
-		dag = dag->twin;
-		swapped = true;
-	}
-	
-	DAGEdges sp_edges1 = compute_dag_edges_on_chain(apex_u, next_dag);
-	DAGEdges sp_edges2 = compute_dag_edges_off_chain(apex_v, dag, next_dag);
-	if (sink){
-		SPEdge* sp_e1 = new SPEdge(apex_u, sink);
-		SPEdge* sp_e2 = new SPEdge(apex_v, sink);
-		SPBEdge* sp_be1 = new SPBEdge(apex_u, sink);
-		SPBEdge* sp_be2 = new SPBEdge(apex_v, sink);	
-		if (next_dag->prev->target == sink){	
-			next_dag = next_dag->next;
-			sp_e2 = sp_edges2[1].first;
-			sp_be2 = sp_edges2[1].second;
-		}
-		else{
-			sp_e2 = sp_edges2[0].first;
-			sp_be2 = sp_edges2[0].second;
-		}
-		sp_e1->sp_weight = next_dag->next->weight;
-		sp_be1->sp_bweight = next_dag->next->beer_edge->distB;
-		sp_e1->cross_apex = apex_u;
-		sp_be1->pathB = make_tuple(apex_u, next_dag->next, MAX);
-		sp_edges1 = {make_pair(sp_e1, sp_be1)};
-		sp_edges2 = {make_pair(sp_e2, sp_be2)};
-	}
-	
-	dag_graph.push_back(new DAGVertex(apex_u, sp_edges1));
-	dag_graph.push_back(new DAGVertex(apex_v, sp_edges2));
-	if (swapped)
-		swap(dag_graph.rbegin()[0], dag_graph.rbegin()[1]);
+	mDAG.push_back(col_vtx1);
+	mDAG.push_back(col_vtx2);
 } 
 
 
-DAG build_dag(struct Vertex* src, struct Vertex* sink, struct lca* your_lca){
-	DAG dag_graph;
-	DAGEdges spes;
-	struct Node *u = src->chain->v_chain[0].first->incident_face;
-	struct Node *v = sink->chain->v_chain[0].first->incident_face;
-	struct Vertex *col_vtx1 = src, *col_vtx2 = src;
-	struct HalfEdge *prev_col_edge = NULL, *col_edge = NULL;
-	int ith_col = 0;
 
+void dag::build_dag(graph& G, struct vertex* src, struct vertex* sink){
+	struct node* u = dcel::face(src);
+	struct node* v = dcel::face(sink);
+	struct vertex* col_vtx1 = src;
+	struct vertex* col_vtx2 = src;
+	struct halfedge* col_edge = NULL; 
+	struct halfedge* sink2vtx = NULL;
+
+	clock_t start = clock();
 	do {
 		// Answer last label query and second node query
-		struct Node* lnq = last_node_query(col_vtx1, u, v, your_lca);
-		if (col_vtx1 != col_vtx2 && check_incident_vertex(lnq, col_vtx2))
-			lnq = last_node_query(col_vtx2, u, v, your_lca);
-		struct Node* snq = second_node_query(lnq, v, your_lca);
+		struct node* lnq = G.last_node_query(col_vtx1, u, v);
+		if (col_vtx1 != col_vtx2 && graph::incident_vertex2face(col_vtx2, lnq))
+			lnq = G.last_node_query(col_vtx2, u, v);
+		struct node* snq = G.second_node_query(lnq, v);
 		u = snq;
 
-		// Get the next DAG column edge
-		if (lnq->incident_edge->twin->incident_face == snq)
-			col_edge = lnq->incident_edge;
-		else col_edge = snq->incident_edge->twin;
 
-		// Building DAG column from above vertices
-		if (ith_col == 0){
-			src->col = ith_col++;
-			spes = compute_dag_edges_on_chain(src, col_edge);
-			dag_graph.push_back(new DAGVertex(src, spes));
+		// Get the next (i+1)th DAG column edge
+		if (dcel::face(dcel::twin(dcel::edge(lnq))) == snq)
+			col_edge = dcel::edge(lnq);
+		else col_edge = dcel::twin(dcel::edge(snq));
+
+
+		// Build ith DAG column with col_vt1 & col_vtx2
+		if (col_vtx1 == col_vtx2){						// edge case: 0th col in DAG
+			src->dag_edges = dag::compute_dag_edges_off_chain(src, col_edge);
+			mDAG.push_back(src);
 		}
-		else compute_dag_edges(dag_graph, prev_col_edge, col_edge);
-		
-		col_vtx1 = col_edge->target;
-		col_vtx2 = col_edge->prev->target;
-		col_vtx1->col = col_vtx2->col = ith_col++;
-		prev_col_edge = col_edge;
-	} while(!(col_edge = check_on_chain(col_vtx1, sink, your_lca)) && !(col_edge = check_on_chain(col_vtx2, sink, your_lca)));
-	
-	sink->col = ith_col;
-	compute_dag_edges(dag_graph, prev_col_edge, col_edge, sink);
-	dag_graph.push_back(new DAGVertex(sink));
-	return dag_graph;
-}
+		else dag::compute_dag_edges(col_vtx1, col_vtx2, col_edge);		// ith col in DAG
 
 
-struct Node* second_node_query(Node* u, Node* v, lca* your_lca){
-	struct HalfEdge* parent_edge = u->incident_edge;
-	struct Node* u_parent = parent_edge->twin->incident_face;
+		// Update col_vt1 & col_vtx2: Get the next (i+1)th DAG column vertices
+		col_vtx1 = dcel::target(col_edge);
+		col_vtx2 = dcel::origin(col_edge);
+	} while(!(sink2vtx = graph::get_edge(sink, col_vtx1)) && !(sink2vtx = graph::get_edge(sink, col_vtx2)));
 
-	if (u->left && get_lca(your_lca, v, u->left) == u->left)
-		return u->left;
-	else if (u->right && get_lca(your_lca, v, u->right) == u->right)
-		return u->right;
-	else if (u == v)
-		return v;
-	return u_parent;
-}
-
-
-struct Node* last_node_query(Vertex* vertex, Node* u, Node* v , lca* your_lca){
-	if (u == v) return v;
-
-	else if (check_incident_vertex(v, vertex))
-		return v;
-
-	else if (get_lca(your_lca, u, v) == v) 
-		return vertex->chain->p_chain_h;
-
-	else if (get_lca(your_lca, u, v) == u){
-		Node* u_child;
-		if (u->left != NULL && get_lca(your_lca, u->left, v) == u->left)
-			u_child = u->left;
-		else if (u->right != NULL && get_lca(your_lca, u->right, v) == u->right)
-			u_child = u->right;
-
-		Node* w1 = get_lca(your_lca, v, vertex->chain->p_chain_ccw);
-		Node* w2 = get_lca(your_lca, v, vertex->chain->p_chain_cw);
-
-		if (get_lca(your_lca, w1, u_child) == u_child)
-			return w1;
-		else if (get_lca(your_lca, w2, u_child) == u_child)
-			return w2;
-		else return u;
+	// Build (L-1)th DAG column with col_vtx1 & col_vt2
+	if (col_vtx1 != dcel::target(sink2vtx)){
+		swap(col_vtx1, col_vtx2);
+		col_edge = dcel::twin(col_edge);
 	}
 
-	else {
-		Node* x = get_lca(your_lca, u, v);
-		Node* y = x->left;
-		Node* z;
-		if (y != get_lca(your_lca, u, y)){
-			y = x->right;
-			z = x->left;
-		}
-		else z = x->right;
+	// DAG shortest path edge
+	struct d_edge* sp_e1 = new d_edge(sink);
+	struct d_edge* sp_be1 = new d_edge(sink);
+	sp_e1->weight = dcel::weight(sink2vtx);
+	sp_be1->weight = beer::weightB(sink2vtx);
+	sp_e1->subpath = sp_be1->subpath = NIL;
 
-		if (get_lca(your_lca, vertex->chain->p_chain_h, y) == y)
-			return vertex->chain->p_chain_h;
-		else if (x != vertex->chain->p_chain_h)
-			return x;
-		else {
-			if (vertex->chain->p_chain_h == vertex->chain->p_chain_ccw)
-				return x;
-			else if (vertex->chain->p_chain_h == vertex->chain->p_chain_cw)
-				return x;
-			else {
-				if (get_lca(your_lca, vertex->chain->p_chain_ccw, z) == z)
-					return get_lca(your_lca, v, vertex->chain->p_chain_ccw);
-				else if (get_lca(your_lca, vertex->chain->p_chain_cw, z) == z)
-					return get_lca(your_lca, v, vertex->chain->p_chain_cw);
-			}
-		}
+	// DAG shortest path beer edge
+	struct d_edge* sp_e2 = dag::compute_spedge_on_chain(col_vtx1, col_vtx2, sink);
+	struct d_edge* sp_be2 = dag::compute_spbedge_on_chain(col_vtx1, col_vtx2, sink);
+
+	col_vtx1->dag_edges = {make_pair(sp_e1, sp_be1)};
+	col_vtx2->dag_edges = {make_pair(sp_e2, sp_be2)};
+	mDAG.push_back(col_vtx1);
+	mDAG.push_back(col_vtx2);
+
+	// Add last Lth DAG column with sink
+	mDAG.push_back(sink);
+
+	build_duration = (clock() - start) / (double) CLOCKS_PER_SEC;
+	return;
+}
+
+
+
+void dag::reset(){
+	for (int i = 0; i < mDAG.size(); i++){
+		mDAG[i]->pred = NULL;
+		mDAG[i]->predB = NIL;
+
+		// for (int j = 0; j < mDAG[i]->dag_edges.size(); j++){
+		// 	delete mDAG[i]->dag_edges[j].first;
+		// 	delete mDAG[i]->dag_edges[j].second;
+		// }
 	}
 
-	return NULL;
+	mDAG.clear();
+	return;
 }
+

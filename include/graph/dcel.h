@@ -1,128 +1,184 @@
 #ifndef DCEL_H
 #define DCEL_H
 #include <vector>
-#include <tuple>
 #include <utility>
 
 using namespace std;
 
-#include "btree.h"
-#include "lca.h"
-#include "beer.h"
-#include "../src/dag.h"
+#include "../utils.h"
 
-struct HalfEdge { 
-	double weight;
-	struct BEdge* beer_edge;
-	struct Vertex* target;
-	struct Node* incident_face;
-	struct HalfEdge* twin;
-	struct HalfEdge* next;
-	struct HalfEdge* prev;
-	pair<struct Vertex*, int> apex;
+// forward declaration
+struct lca;
+struct b_edge;
+struct d_edge;
 
-	HalfEdge() {
-		weight = -1.0;
+typedef vector<pair<struct d_edge*, struct d_edge*> > DAGEdges;
+
+
+struct vertex {
+	// adjacency list of constant size
+	vector<struct halfedge*> adj;
+
+	/*************** preprocess data ***************/
+	// chain data
+	vector<pair<struct vertex*, double> > v_chain;
+	struct lca*  lca_Av_chain;
+	struct node* cw;
+	struct node* ccw;
+	struct node* h;
+
+	// beer edge data
+	struct b_edge* beer_edge; 
+	/***********************************************/
+
+	/********** shortest (beer) path data **********/
+	// single source
+	double dist, distB;
+	struct vertex* pred;
+	pair<struct vertex*, bool> predB;
+
+	// directed acyclic graph
+	DAGEdges dag_edges;
+	/***********************************************/
+
+	// ID
+	int data;
+	pair<double, double> point;
+	bool is_beer;
+
+
+	vertex(int val) {
+		data = val;
+		pair<double, double> point;
+		is_beer = false;
 		beer_edge = NULL;
+
+		vector<struct halfedge*> adj;
+
+		vector<pair<struct vertex*, double> > v_chain;
+		lca_Av_chain = NULL;
+		cw = ccw = h = NULL;
+
+		dist = distB = 0.0;
+		pred = NULL;
+		predB = NIL;
+		DAGEdges dag_edges;
+	}
+
+	vertex(){
+	}
+};
+
+namespace dcel {
+	int data(struct vertex* v);					
+	bool beer(struct vertex* v);
+	struct node* face(struct vertex* v);			
+	struct b_edge* edgeB(struct vertex* v);	
+	double dist2cw(struct vertex* v, int i);
+	struct vertex* neighbour(struct vertex* v, int i);
+	struct node* cw(struct vertex* v);
+	struct node* ccw(struct vertex* v);
+	struct node* h(struct vertex* v);
+	double dist(struct vertex* v);				
+	double distB(struct vertex* v);				
+	struct vertex* pred(struct vertex* v);
+	pair<struct vertex*, bool> predB(struct vertex* v);
+}
+
+
+
+	/*###############################################################################################################*/
+
+
+
+struct halfedge { 
+	double weight;
+	struct vertex* target;
+	struct node* incident_face;
+	struct halfedge* twin;
+	struct halfedge* next;
+	struct halfedge* prev;
+	
+	// beer edge data
+	struct b_edge* beer_edge;
+
+	// index into apex's chain
+	int index;
+
+	halfedge() {
+		weight = -1.0;
 		target = NULL;
 		incident_face = NULL;
 		twin = next = prev = NULL;
-	}
-};
-
-struct Vertex {
-	int data;
-	pair<double, double> point;
-	bool beer;
-	struct BEdge* beer_edge; 
-	struct Chain* chain;
-	struct SPEdge* p;
-	int col;
-
-	double dist, distB;
-	struct Vertex* pred;
-	pair<struct HalfEdge*, bool> predB;
-
-	Vertex(double x, double	y, int val) {
-		data = val;
-		point = make_pair(x, y);
-		beer = false;
 		beer_edge = NULL;
-		chain = NULL;
-		p = NULL;
-		col = -1;
-		dist = distB = 0.0;
-		pred = NULL;
-	}
-
-	Vertex(int val) {
-		data = val;
-		point = make_pair(0, 0);
-		beer = false;
-		beer_edge = NULL;
-		chain = NULL;
-		p = NULL;
-		col = -1;
-		dist = distB = 0.0;
-		pred = NULL;
-	}
-
-	Vertex(){
+		index = -1;
 	}
 };
 
-struct Chain{
-	vector<pair<struct HalfEdge*, double> > v_chain;
-	// vector<double> Av;
-	struct Node* root_Av;
-	struct lca* lca_chain_Av;
-	struct Node* p_chain_cw;
-	struct Node* p_chain_ccw;
-	struct Node* p_chain_h;
+namespace dcel {
+	double weight(struct halfedge* e);
+	struct vertex* target(struct halfedge* e);
+	struct vertex* origin(struct halfedge* e);
+	struct node* face(struct halfedge* e);
+	struct halfedge* twin(struct halfedge* e);			
+	struct halfedge* next(struct halfedge* e);			
+	struct halfedge* prev(struct halfedge* e);			
+	struct b_edge* edgeB(struct halfedge* e);
+	int apex_index(struct halfedge* e);
+	struct vertex* apex(struct halfedge* e);
+}
 
-	Chain(){
-		vector<pair<struct HalfEdge*, double> > v_chain;
-		// vector<double> Av;
-		root_Av = NULL;
-		lca_chain_Av = NULL;
-		p_chain_cw = NULL;
-		p_chain_ccw = NULL;
-		p_chain_h = NULL;
-	}
+
+
+	/*###############################################################################################################*/
+
+
+
+struct node {
+    int iData;
+    double dData;
+    struct halfedge* incident_edge;
+    struct node* left;
+    struct node* right;
+ 
+    node (int iVal){
+        iData = iVal;
+        double dData;
+        incident_edge = NULL;
+        left = NULL;
+        right = NULL;
+    }
+
+    node (int iVal, double dVal){
+        iData = iVal;
+        dData = dVal;
+        incident_edge = NULL;
+        left = NULL;
+        right = NULL;
+    }
+
+    node (){
+    }
 };
 
+namespace dcel {
+	int iData(struct node* n);            
+	double dData(struct node* n);         
+	struct halfedge* edge(struct node* n);
+	struct node* left(struct node* n);    
+	struct node* right(struct node* n);
+} 
 
 
-HalfEdge* split_face(HalfEdge* h, Vertex* dest, Node* f1, Node* f2);
-HalfEdge* add_edge(HalfEdge* h, Vertex* dest, Node* f1, Node* f2);
-Vertex* add_vertex(int val, int radius, float beer_prob);
-HalfEdge* build_polygon(Node* root, int V, float beer_prob);
-void triangulate_polygon(HalfEdge *root_edge, Node* root, int V, float beer_prob);
-HalfEdge* check_incident_vertex(Node* face, Vertex* v);
-HalfEdge* check_on_chain(Vertex* u, Vertex* v, lca* your_lca);
-void preprocess_graph(struct HalfEdge* root_edge, struct lca* your_lca);
 
-double w(HalfEdge* e);
-Node* face(HalfEdge* e);
-Vertex* target(HalfEdge* e);
-HalfEdge* twin(HalfEdge* e);
-HalfEdge* next(HalfEdge* e);
-HalfEdge* prev(HalfEdge* e);
-Vertex* apex(HalfEdge* e);
-int apex_index(HalfEdge* e);
+	/*###############################################################################################################*/
 
-int data(Vertex* v);
-double x_coord(Vertex* v);
-double y_coord(Vertex* v);
-HalfEdge* out(Vertex* v);
-Node* cw(Vertex* v);
-Node* ccw(Vertex* v);
-Node* h(Vertex* v);
 
-struct HalfEdge* get_inEdge(Vertex* v);
 
-void vertex_traversal(HalfEdge* root_edge);
-void edge_traversal(HalfEdge* root_edge);
-void face_traversal(Node* root);
+namespace dcel {
+	struct vertex* add_vertex(int val, int radius, float beer_prob);
+	struct halfedge* add_edge(struct halfedge* h, struct vertex* dest, struct node* f1, struct node* f2);
+	struct halfedge* split_face(struct halfedge* h, struct vertex* dest, struct node* f1, struct node* f2);
+}
 
 #endif
