@@ -13,7 +13,7 @@ namespace dcel {
 		struct vertex* new_vertex = new vertex(val);
 		new_vertex->point.first = radius * sin((val + 1) * (2*M_PI/radius));
 		new_vertex->point.second = radius * cos((val + 1) * (2*M_PI/radius));
-		new_vertex->is_beer = (val != 0 && val % 13 == 0) ? true : false; // random_bernoulli(beer_prob);
+		new_vertex->is_beer = random_bernoulli(beer_prob);
 		new_vertex->beer_edge = new b_edge(new_vertex, new_vertex);
 		return new_vertex;
 	}
