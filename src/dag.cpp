@@ -191,7 +191,7 @@ void dag::shortest_path_dag(){
 
 	for (int i = 3, j = 0; i < mDAG.size(); i++, j = !j){
 		mDAG[i]->dist = min(dcel::dist(mDAG[i - j - 1]) + dag::weight(mDAG[i - j - 1], mDAG[i]),
-						   dcel::dist(mDAG[i - j - 2]) + dag::weight(mDAG[i - j - 2], mDAG[i]));
+				    dcel::dist(mDAG[i - j - 2]) + dag::weight(mDAG[i - j - 2], mDAG[i]));
 
 		if (mDAG[i]->dist == dcel::dist(mDAG[i - j - 1]) + dag::weight(mDAG[i - j - 1], mDAG[i]))
 			mDAG[i]->pred = mDAG[i - j - 1];
@@ -210,7 +210,7 @@ void dag::shortest_beer_path_dag(){
 
 	for (int i = 3, j = 0; i < mDAG.size(); i++, j = !j){
 		mDAG[i]->distB = min(min(dcel::distB(mDAG[i - j - 1]) + dag::weight(mDAG[i - j - 1], mDAG[i]), dcel::dist(mDAG[i - j - 1]) + dag::weightB(mDAG[i - j - 1], mDAG[i])),
-						     min(dcel::distB(mDAG[i - j - 2]) + dag::weight(mDAG[i - j - 2], mDAG[i]), dcel::dist(mDAG[i - j - 2]) + dag::weightB(mDAG[i - j - 2], mDAG[i])));
+					 min(dcel::distB(mDAG[i - j - 2]) + dag::weight(mDAG[i - j - 2], mDAG[i]), dcel::dist(mDAG[i - j - 2]) + dag::weightB(mDAG[i - j - 2], mDAG[i])));
 
 		if (dcel::distB(mDAG[i]) == dcel::distB(mDAG[i - j - 1]) + dag::weight(mDAG[i - j - 1], mDAG[i]))
 			mDAG[i]->predB = make_pair(mDAG[i - j - 1], 0);
