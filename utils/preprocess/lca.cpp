@@ -126,9 +126,9 @@ void build_log_array(struct lca* lca){
 
 void precompute_lca(struct lca* lca, struct node* root) {
     // Stores Euler Tour 
-    lca->first_visit.assign(lca->N, -1);
-    lca->height.reserve(2 * lca->N);
-    lca->euler_tour.reserve(2 * lca->N);
+    lca->first_visit.assign(lca->N + 1, -1);
+    lca->height.reserve(2 * lca->N - 1);
+    lca->euler_tour.reserve(2 * lca->N - 1);
 
     eulerTree(lca, root, 0); 
     int m = lca->euler_tour.size();
