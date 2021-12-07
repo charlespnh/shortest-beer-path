@@ -38,6 +38,9 @@ bool verify::verify_tree(struct vertex* root_v, struct halfedge* root_e){
 
 
 bool verify::verify_distance(struct vertex* v){
+	if (dcel::pred(v) == NULL)
+		return true;
+
 	for (int k = 0; k < v->v_chain.size(); k++){
 		if (dcel::dist(v) > dcel::dist(dcel::neighbour(v, k)) + dcel::weight(graph::get_edge(v, dcel::neighbour(v, k))))
 			return false;
@@ -48,6 +51,9 @@ bool verify::verify_distance(struct vertex* v){
 
 
 bool verify::verify_predecessor(struct vertex* v){
+	if (dcel::pred(v) == NULL)
+		return true;
+	
 	if (dcel::dist(v) > dcel::dist(dcel::pred(v)) + dcel::weight(graph::get_edge(v, dcel::pred(v))))
 		return false;
 
@@ -61,10 +67,10 @@ bool verify::verify_sssp(struct vertex* src, struct halfedge* root_e){
 
 	verified = verify::verify_tree(src, root_e);
 	if (!verified){
-		cout << "Predecessors computed do not induce a tree\n\n";
+		cout << "Predecessors computed induce a tree\n\n";
 		return verified;
 	}
-	else cout << "Predecessors computed induce a tree\n\n";
+	else cout << "Predecessors computed do not induce a tree\n\n";
 
 	struct halfedge* traverse = dcel::twin(root_e);
 	struct vertex* cur = dcel::target(traverse);
@@ -84,8 +90,6 @@ bool verify::verify_sssp(struct vertex* src, struct halfedge* root_e){
 		else cout << "d(" << dcel::data(cur) << ") is correctly computed - correct predecessor computed\n\n";
 
 		traverse = dcel::next(traverse);
-		if (src == dcel::target(traverse))
-			traverse = dcel::next(traverse);
 		cur = dcel::target(traverse);
 	} while(traverse != dcel::twin(root_e));
 

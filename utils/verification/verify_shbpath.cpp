@@ -9,6 +9,9 @@ using namespace std;
 
 
 bool verify::verify_distanceB(struct vertex* v){
+	if (dcel::pred(v) == NULL)
+		return true;
+	
 	for (int k = 0; k < v->v_chain.size(); k++){
 		if (dcel::dist(v) > min(dcel::dist(dcel::neighbour(v, k)) + beer::weightB(graph::get_edge(v, dcel::neighbour(v, k))),
 								dcel::distB(dcel::neighbour(v, k)) + dcel::weight(graph::get_edge(v, dcel::neighbour(v, k)))))
@@ -20,6 +23,9 @@ bool verify::verify_distanceB(struct vertex* v){
 
 
 bool verify::verify_predecessorB(struct vertex* v){
+	if (dcel::pred(v) == NULL)
+		return true;
+	
 	if (dcel::dist(v) > min(dcel::dist(dcel::predB(v).first) + beer::weightB(graph::get_edge(v, dcel::pred(v))), 
 							dcel::distB(dcel::predB(v).first) + dcel::weight(graph::get_edge(v, dcel::pred(v)))))
 		return false;
@@ -50,8 +56,6 @@ bool verify::verify_sssbp(struct vertex* src, struct halfedge* root_e){
 		else cout << "dB(" << dcel::data(cur) << ") is correctly computed - correct predecessor computed\n\n";
 
 		traverse = dcel::next(traverse);
-		if (src == dcel::target(traverse))
-			traverse = dcel::next(traverse);
 		cur = dcel::target(traverse);
 	} while(traverse != dcel::twin(root_e));
 
