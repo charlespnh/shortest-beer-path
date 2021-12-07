@@ -1,8 +1,6 @@
 #include <vector>
-#include <unordered_set>
 #include <utility>
 #include <ctime>
-#include <cstdio>
 #include <iostream>
 
 using namespace std;
@@ -29,23 +27,29 @@ bool graph::incident_vertex2face(struct vertex* v, struct node* face){
 
 // Get directed halfedge {u, v}
 struct halfedge* graph::get_edge(struct vertex* u, struct vertex* v){
-	for (auto e : u->adj){
+	for (auto e : u->adj)
 		if (v == dcel::origin(e)) return dcel::twin(e);
-	}
 
-	for (auto e : v->adj){
+	for (auto e : v->adj)
 		if (u == dcel::origin(e)) return e;
-	}
 
 	return NULL;
 }
 
 
 struct vertex* graph::get_vertex(int v){
-	struct vertex* vertex;
+	struct vertex* vertex = NULL;
 	if (v == -1) vertex = dcel::origin(mroot_edge);
 	else if (v == 0) vertex = dcel::target(mroot_edge);
-	else vertex = dcel::apex(dcel::edge(get_lca(mdual_lca, v, v)));
+	// else vertex = dcel::apex(dcel::edge(get_lca(mdual_lca, v, v)));
+	else{
+		struct halfedge* traverse = dcel::twin(mroot_edge);
+		do {
+			traverse = dcel::next(traverse);
+			if (dcel::data(dcel::target(traverse)) == v)
+				return dcel::target(traverse);
+		} while(traverse != dcel::twin(mroot_edge));
+	}
 
 	return vertex;
 }
@@ -93,7 +97,7 @@ void graph::triangulate_polygon(struct halfedge* root_edge, struct node* root_no
 
 
 void graph::build_polygon(){
-	triangulate_start = clock();
+	clock_t start = clock();
 	struct vertex* u = dcel::add_vertex(-1, mV, mbeer_probability);
 	struct vertex* v = dcel::add_vertex(0, mV, mbeer_probability);
 	struct halfedge* h1 = new halfedge();
@@ -116,10 +120,10 @@ void graph::build_polygon(){
 	
 	mroot_edge = h1;
 	triangulate_polygon(mroot_edge, mroot_node);
-	triangulate_duration = (clock() - triangulate_start) / (double) CLOCKS_PER_SEC;
 
 	u->adj = {dcel::twin(mroot_edge), dcel::prev(mroot_edge)};
 	v->adj = {mroot_edge, dcel::twin(dcel::next(mroot_edge))};
+	triangulate_duration = (clock() - start) / (double) CLOCKS_PER_SEC;
 	return;
 }
 
@@ -129,7 +133,6 @@ void graph::build_polygon(){
 
 void graph::preprocess_chain_spath(struct vertex* apex, struct halfedge* edge){
 	struct halfedge* traverse = edge;
-
 	int index_chain = 0;
 	double d2cw = 0;
 
@@ -154,13 +157,12 @@ void graph::preprocess_chain_spath(struct vertex* apex, struct halfedge* edge){
 
 void graph::preprocess_chain_bpath(struct vertex* apex, struct halfedge* edge){
 	struct halfedge* traverse = edge;
-
 	vector<double> array_Av;
 	array_Av.reserve(apex->v_chain.size() - 1);
 
 	do {
-		array_Av.push_back(beer::weightB(dcel::prev(traverse)) - dcel::weight(dcel::prev(traverse)));
-
+		array_Av.push_back(beer::weightB(dcel::prev(traverse)) - 
+						   dcel::weight(dcel::prev(traverse)));
 		traverse = dcel::twin(dcel::next(traverse));
 	} while(dcel::twin(dcel::next(traverse)) != edge);
 
@@ -173,29 +175,30 @@ void graph::preprocess_chain_bpath(struct vertex* apex, struct halfedge* edge){
 }
 
 
+
 void graph::preprocess_graph(){
 	mdual_lca = new lca(mV - 2);
-	lca_start = clock();
+	clock_t start = clock();
 	precompute_lca(mdual_lca, mroot_node);
-    lca_duration = (clock() - lca_start) / (double) CLOCKS_PER_SEC;
+    lca_duration = (clock() - start) / (double) CLOCKS_PER_SEC;
 
-	beer_start = clock();
+	start = clock();
 	// Beer Distance - post-order traversal of D(G)
 	beer::computeBeerDistNotRoot(mroot_node);
 	// Beer Distance - pre-order traversal of D(G)
 	beer::computeBeerDistRoot(mroot_node);
-	beer_duration = (clock() - beer_start) / (double) CLOCKS_PER_SEC;
+	beer_duration = (clock() - start) / (double) CLOCKS_PER_SEC;
 
 
 	struct halfedge* traverse_e = dcel::twin(mroot_edge);
 	struct vertex* curr = dcel::origin(traverse_e);
 
-	chain_start = clock();
+	start = clock();
 	// Traversing each vertex of outerplanar graph
 	do {
 		struct halfedge* degree_e = dcel::twin(traverse_e);
 
-		// Lemma 4
+		// Lemma
 		graph::preprocess_chain_spath(curr, degree_e);
 		// Lemma 
 		graph::preprocess_chain_bpath(curr, degree_e);
@@ -203,7 +206,7 @@ void graph::preprocess_graph(){
 		traverse_e = dcel::next(traverse_e);
 		curr = dcel::origin(traverse_e);
 	} while(curr != dcel::target(mroot_edge));
-	chain_duration = (clock() - chain_start) / (double) CLOCKS_PER_SEC;
+	chain_duration = (clock() - start) / (double) CLOCKS_PER_SEC;
 
 	return;
 }
