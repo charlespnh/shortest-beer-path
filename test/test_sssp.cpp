@@ -14,20 +14,17 @@ using namespace std;
 
 
 void test::test_ss(graph& G){
-
-	cout << "\n\t--------------------Testing Single-Source Manual--------------------\n";
-	cout << "\t[1]	Select source\n";
-	cout << "\t[2]	Compute Single-Source Shortest Path\n";
-	cout << "\t[3]	Compute Single-Source Shortest Beer Path\n";
-	cout << "\t[4]	Query time\n";
-		cout << "\t\t[1]	Time computing shortest path\n";
-		cout << "\t\t[2]	Time computing shortest beer path\n";
-	cout << "\t[5]	Verification\n";
-		cout << "\t\t[1]	Verify shortest path\n";
-		cout << "\t\t[2]	Verify shortest beer path\n\n";
-
-
 	while(1){
+		cout << "\n\t--------------------Testing Single-Source Manual--------------------\n";
+		cout << "\t[1]	Select source\n";
+		cout << "\t[2]	Compute Single-Source Shortest Path\n";
+		cout << "\t[3]	Compute Single-Source Shortest Beer Path\n";
+		cout << "\t[4]	Query time\n";
+			cout << "\t\t[1]	Time computing shortest path\n";
+			cout << "\t\t[2]	Time computing shortest beer path\n";
+		cout << "\t[5]	Verification\n";
+			cout << "\t\t[1]	Verify shortest path\n";
+			cout << "\t\t[2]	Verify shortest beer path\n\n";
 		int s;
 		struct vertex* src;
 		struct halfedge* root_edge;
@@ -43,7 +40,20 @@ void test::test_ss(graph& G){
 				cout << "Select source: ";
 				cin >> s;	cout << "\n";
 				src = G.get_vertex(s);
-				root_edge = dcel::next(dcel::edge(dcel::face(src)));
+				if (s == -1)
+					root_edge = dcel::prev(G.mroot_edge);
+				else if (s == 0)
+					root_edge = G.mroot_edge;
+				else{
+					root_edge = dcel::twin(G.mroot_edge);
+					do {
+						root_edge = dcel::next(root_edge);
+						if (dcel::data(dcel::target(root_edge)) == s){
+							root_edge = dcel::prev(dcel::twin(root_edge));
+							break;
+						}
+					} while(root_edge != dcel::twin(G.mroot_edge));
+				}
 
 				break;
 			}
@@ -76,8 +86,13 @@ void test::test_ss(graph& G){
 					vector<struct vertex*> sssbp = single_source::print_sssbp(dcel::target(traverse));
 					
 					cout << "PATH: ";
-					for (auto v : sssbp) cout << dcel::data(v) << " ";	cout << "\n";
-					cout << "Completed\n\n";
+					for (auto v : sssbp){
+						cout << dcel::data(v);
+						if (dcel::beer(v))
+							cout << "(BR)";
+						cout << " ";
+					}
+					cout << "\nCompleted\n\n";
 
 					traverse = dcel::next(traverse);
 				} while(traverse != dcel::twin(G.mroot_edge));
